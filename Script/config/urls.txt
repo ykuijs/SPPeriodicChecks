@@ -1,0 +1,3 @@
+﻿URL,Environment
+https://root.domain.local,acmeprd
+https://test.domain.local,acmeacc

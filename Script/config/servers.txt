@@ -1,0 +1,5 @@
+﻿servername,farm,centraladmin,role,tier
+acme-sp.acme.intra,acmeprd,yes,SP,WFE
+acme-sql.acme.intra,acmeprd,no,SQL,N/A
+acme-sp2.acme.intra,acmetst,yes,SP,WFE
+acme-sql2.acme.intra,acmetst,no,SQL,N/A
