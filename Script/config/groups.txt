@@ -1,0 +1,6 @@
+groupname,useraccount
+spadmins,adminyk
+administrators,adminyk
+spadmins,spadmin
+administrators,"Domain Admins"
+administrators,"Enterprise Admins"

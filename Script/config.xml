@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<AppSettings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="config.xsd">
+    <General>
+        <Debug>false</Debug>
+        <RemoteTimeOut>21600</RemoteTimeOut>
+    </General>
+    <Credentials>
+        <UserName>acme\adminyk</UserName>
+        <Password>abc</Password>
+    </Credentials>
+    <Email>
+        <SendReportsViaEmail>true</SendReportsViaEmail>
+        <SMTPServer>smtp.beheer.nl</SMTPServer>
+        <MailFrom>sharepoint@beheer.nl</MailFrom>
+        <MailTo>sharepoint@beheer.nl</MailTo>
+        <MailCC></MailCC>
+        <MailBCC></MailBCC>
+    </Email>
+    <Reporting>
+        <ReportsToDisk>false</ReportsToDisk>
+        <ReportsFolder>.\Reports</ReportsFolder>
+    </Reporting>
+    <MBSA>
+        <MBSAPath>C:\Program Files\Microsoft Baseline Security Analyzer 2</MBSAPath>
+        <WSUSCabPath>.</WSUSCabPath>
+        <DownloadWSUSFile>false</DownloadWSUSFile>
+    </MBSA>
+    <Logging>
+        <LogPrefix>PeriodicChecks</LogPrefix>
+        <LogFolder>Logs</LogFolder>
+        <RemoteLogFolder>C:\Logs</RemoteLogFolder>
+    </Logging>
+</AppSettings>

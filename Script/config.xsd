@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="AppSettings">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="General" minOccurs="1" maxOccurs="1">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element type="xs:boolean" name="Debug" minOccurs="1" />
+              <xs:element type="xs:unsignedInt" name="RemoteTimeOut" minOccurs="1" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Credentials" minOccurs="1">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element type="xs:string" name="UserName" minOccurs="1" />
+              <xs:element type="xs:string" name="Password" minOccurs="1" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Email" minOccurs="1">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element type="xs:boolean" name="SendReportsViaEmail" minOccurs="1" />
+              <xs:element type="xs:string" name="SMTPServer" minOccurs="1" />
+              <xs:element type="xs:string" name="MailFrom" minOccurs="1" />
+              <xs:element type="xs:string" name="MailTo" minOccurs="1" />
+              <xs:element type="xs:string" name="MailCC" minOccurs="1" />
+              <xs:element type="xs:string" name="MailBCC" minOccurs="1" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Reporting" minOccurs="1">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element type="xs:boolean" name="ReportsToDisk" minOccurs="1" />
+              <xs:element type="xs:string" name="ReportsFolder" minOccurs="1" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="MBSA" minOccurs="1">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element type="xs:string" name="MBSAPath" minOccurs="1" />
+              <xs:element type="xs:string" name="WSUSCabPath" minOccurs="1" />
+              <xs:element type="xs:boolean" name="DownloadWSUSFile" minOccurs="1" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Logging" minOccurs="1">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element type="xs:string" name="LogPrefix" minOccurs="1" />
+              <xs:element type="xs:string" name="LogFolder" minOccurs="1" />
+              <xs:element type="xs:string" name="RemoteLogFolder" minOccurs="1" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
