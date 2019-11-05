@@ -13,15 +13,16 @@ function script:Check32_ScheduledTasks() {
 WriteLog "Starting Check 32: Scheduled Tasks check"
 $results.Check32 = ""
 
-function Get-SchedTasks {  
-    [cmdletbinding(
+function Get-SchedTask {
+    [Cmdletbinding(
         DefaultParameterSetName='COM'
     )]
-    param(
+    param
+    (
         [parameter(
             ValueFromPipeline=$true,
-            ValueFromPipelineByPropertyName=$true, 
-            ValueFromRemainingArguments=$false, 
+            ValueFromPipelineByPropertyName=$true,
+            ValueFromRemainingArguments=$false,
             Position=0
         )]
         [Alias("host","server","computer")]
@@ -40,7 +41,7 @@ function Get-SchedTasks {
         [validatescript({
             #Test path if provided, otherwise allow $null
             if($_){
-                Test-Path -PathType Container -path $_ 
+                Test-Path -PathType Container -path $_
             }
             else {
                 $true
@@ -57,13 +58,14 @@ function Get-SchedTasks {
         [switch]
         $CompatibilityMode
     )
-    Begin{
-
+    Begin
+    {
         if (-not $CompatibilityMode)
         {
             $sch = New-Object -ComObject Schedule.Service
-        
-            function Get-AllTaskSubFolders {
+
+            function Get-AllTaskSubFolder
+            {
                 [cmdletbinding()]
                 param (
                     # Set to use $Schedule as default parameter so it automatically list all files
@@ -94,7 +96,7 @@ function Get-SchedTasks {
                                     $fold
                                     if($fold.getfolders(1))
                                     {
-                                        Get-AllTaskSubFolders -FolderRef $fold
+                                        Get-AllTaskSubFolder -FolderRef $fold
                                     }
                                 }
                             }
@@ -117,33 +119,44 @@ function Get-SchedTasks {
 
                     #Return only unique results
                         $Results     = @($ArrFolders) + @($FolderRef)
-                        $UniquePaths = $Results | select -ExpandProperty path -Unique
-                        $Results | ?{$UniquePaths -contains $_.path}
+                        $UniquePaths = $Results | Select-Object -ExpandProperty path -Unique
+                        $Results | Where-Object -FilterScript { $UniquePaths -contains $_.path }
                 }
-            } #Get-AllTaskSubFolders
+            } #Get-AllTaskSubFolder
         }
 
-        function Get-SchTasks {
-            [cmdletbinding()]
-            param([string]$computername, [string]$folder, [switch]$CompatibilityMode)
-            
+        function Get-SchTask {
+            [Cmdletbinding()]
+            param
+            (
+                [string]
+                $computername,
+
+                [string]
+                $folder,
+
+                [switch]
+                $CompatibilityMode
+            )
+
             #we format the properties to match those returned from com objects
             $result = @( schtasks.exe /query /v /s $computername /fo csv |
                 convertfrom-csv |
-                ?{$_.taskname -ne "taskname" -and $_.taskname -match $( $folder.replace("\","\\") ) } |
-                select @{ label = "ComputerName"; expression = { $computername } },
-                    @{ label = "Name"; expression = { $_.TaskName } },
-                    @{ label = "Action"; expression = {$_."Task To Run"} },
-                    @{ label = "LastRunTime"; expression = {$_."Last Run Time"} },
-                    @{ label = "NextRunTime"; expression = {$_."Next Run Time"} },
-                    "Status",
-                    "Author"
+                Where-Object -FilterScript {
+                    $_.taskname -ne "taskname" -and $_.taskname -match $( $folder.replace("\","\\") )
+                } | Select-Object @{ label = "ComputerName"; expression = { $computername } },
+                                  @{ label = "Name"; expression = { $_.TaskName } },
+                                  @{ label = "Action"; expression = {$_."Task To Run"} },
+                                  @{ label = "LastRunTime"; expression = {$_."Last Run Time"} },
+                                  @{ label = "NextRunTime"; expression = {$_."Next Run Time"} },
+                                  "Status",
+                                  "Author"
             )
 
             if ($CompatibilityMode)
             {
                 #User requested compat mode, don't add props
-                $result    
+                $result
             }
             else
             {
@@ -153,20 +166,30 @@ function Get-SchedTasks {
                 {
                     $name = @( $item.Name -split "\\" )[-1]
                     $taskPath = $item.name
-                    $item | select ComputerName, @{ label = "Name"; expression = {$name}}, @{ label = "Path"; Expression = {$taskPath}}, Enabled, Action, Arguments, UserId, LastRunTime, NextRunTime, Status, Author, RunLevel, Description, NumberOfMissedRuns
+                    $item | Select-Object ComputerName,
+                                          @{ label = "Name"; expression = {$name}},
+                                          @{ label = "Path"; Expression = {$taskPath}},
+                                          Enabled,
+                                          Action,
+                                          Arguments,
+                                          UserId,
+                                          LastRunTime,
+                                          NextRunTime,
+                                          Status,
+                                          Author,
+                                          RunLevel,
+                                          Description,
+                                          NumberOfMissedRuns
                 }
             }
-        } #Get-SchTasks
-    }    
-    Process {
-        #loop through computers
-        foreach($computer in $computername)
+        } #Get-SchTask
+    }
+    Process
+    {
+        # Loop through computers
+        foreach ($computer in $computername)
         {
-        
-            #bool in case com object fails, fall back to schtasks
-            $failed = $false
-        
-            write-verbose "Running against $computer"
+            Write-Verbose "Running against $computer"
             try
             {
                 #use com object unless in compatibility mode.  Set compatibility mode if this fails
@@ -176,61 +199,61 @@ function Get-SchedTasks {
                     {
                         #Connect to the computer
                         $sch.Connect($computer)
-                        
+
                         if ($recurse)
                         {
-                            $AllFolders = Get-AllTaskSubFolders -FolderRef $sch.GetFolder($folder) -recurse -ErrorAction stop
+                            $AllFolders = Get-AllTaskSubFolder -FolderRef $sch.GetFolder($folder) -recurse -ErrorAction stop
                         }
                         else
                         {
-                            $AllFolders = Get-AllTaskSubFolders -FolderRef $sch.GetFolder($folder) -ErrorAction stop
+                            $AllFolders = Get-AllTaskSubFolder -FolderRef $sch.GetFolder($folder) -ErrorAction stop
                         }
-                
-                        foreach($fold in $AllFolders)
+
+                        foreach ($fold in $AllFolders)
                         {
                             #Get tasks in this folder
                             $tasks = $fold.GetTasks(0)
-                
+
                             foreach($task in $tasks)
-                            {                            
-                                #extract helpful items from XML
-                                $Author = ([regex]::split($task.xml,'<Author>|</Author>'))[1] 
-                                $UserId = ([regex]::split($task.xml,'<UserId>|</UserId>'))[1] 
+                            {
+                                # Extract helpful items from XML
+                                $Author = ([regex]::split($task.xml,'<Author>|</Author>'))[1]
+                                $UserId = ([regex]::split($task.xml,'<UserId>|</UserId>'))[1]
                                 $Description =([regex]::split($task.xml,'<Description>|</Description>'))[1]
                                 $Action = ([regex]::split($task.xml,'<Command>|</Command>'))[1]
                                 $Arguments = ([regex]::split($task.xml,'<Arguments>|</Arguments>'))[1]
                                 $RunLevel = ([regex]::split($task.xml,'<RunLevel>|</RunLevel>'))[1]
-                                $LogonType = ([regex]::split($task.xml,'<LogonType>|</LogonType>'))[1]
-                            
-                                #convert state to status
-                                Switch ($task.State) { 
+                                #$LogonType = ([regex]::split($task.xml,'<LogonType>|</LogonType>'))[1]
+
+                                # Convert state to status
+                                Switch ($task.State) {
                                     0 { $Status = "Unknown" }
                                     1 { $Status = "Disabled" }
                                     2 { $Status = "Queued" }
                                     3 { $Status = "Ready" }
-                                    4 { $Status = "Running" } 
+                                    4 { $Status = "Running" }
                                 }
 
-                                #output the task details
+                                # Output the task details
                                 if (-not $exclude -or $task.Path -notmatch $Exclude)
                                 {
-                                    $task | select @{ label = "ComputerName"; expression = { $computer } }, 
-                                        Name,
-                                        Path,
-                                        Enabled,
-                                        @{ label = "Action"; expression = {$Action} },
-                                        @{ label = "Arguments"; expression = {$Arguments} },
-                                        @{ label = "UserId"; expression = {$UserId} },
-                                        LastRunTime,
-                                        NextRunTime,
-                                        @{ label = "Status"; expression = {$Status} },
-                                        @{ label = "Author"; expression = {$Author} },
-                                        @{ label = "RunLevel"; expression = {$RunLevel} },
-                                        @{ label = "Description"; expression = {$Description} },
-                                        NumberOfMissedRuns
-                            
+                                    $task | Select-Object @{ label = "ComputerName"; expression = { $computer } },
+                                                          Name,
+                                                          Path,
+                                                          Enabled,
+                                                          @{ label = "Action"; expression = {$Action} },
+                                                          @{ label = "Arguments"; expression = {$Arguments} },
+                                                          @{ label = "UserId"; expression = {$UserId} },
+                                                          LastRunTime,
+                                                          NextRunTime,
+                                                          @{ label = "Status"; expression = {$Status} },
+                                                          @{ label = "Author"; expression = {$Author} },
+                                                          @{ label = "RunLevel"; expression = {$RunLevel} },
+                                                          @{ label = "Description"; expression = {$Description} },
+                                                          NumberOfMissedRuns
+
                                     #if specified, output the results in importable XML format
-                                    if($path)
+                                    if ($path)
                                     {
                                         $xml = $task.Xml
                                         $taskname = $task.Name
@@ -244,14 +267,14 @@ function Get-SchedTasks {
                     {
                         try
                         {
-                            Get-SchTasks -computername $computer -folder $folder -ErrorAction stop
+                            Get-SchTask -computername $computer -folder $folder -ErrorAction stop
                         }
                         catch
                         {
                             Write-Error "Could not pull scheduled tasks from $computer using schtasks.exe:`n$_"
                             Continue
                         }
-                    }             
+                    }
                 }
 
                 #otherwise, use schtasks
@@ -259,7 +282,7 @@ function Get-SchedTasks {
                 {
                     try
                     {
-                        Get-SchTasks -computername $computer -folder $folder -CompatibilityMode -ErrorAction stop
+                        Get-SchTask -computername $computer -folder $folder -CompatibilityMode -ErrorAction stop
                     }
                     catch
                     {
@@ -282,22 +305,22 @@ function findlogs() {
     Param(
       [Parameter(Mandatory=$true)]
       [String]$TaskName
-    ) 
- 
+    )
+
     $stopCode = 201
     $errorCode = 202
 
-    $filter = @" 
-    <QueryList> 
-      <Query Id="0" Path="Microsoft-Windows-TaskScheduler/Operational"> 
-        <Select Path="Microsoft-Windows-TaskScheduler/Operational">*[System[(EventID=$stopCode or EventID=$errorCode)] and EventData[Data[@Name="TaskName"]="\$TaskName"]]</Select> 
-      </Query> 
+    $filter = @"
+    <QueryList>
+      <Query Id="0" Path="Microsoft-Windows-TaskScheduler/Operational">
+        <Select Path="Microsoft-Windows-TaskScheduler/Operational">*[System[(EventID=$stopCode or EventID=$errorCode)] and EventData[Data[@Name="TaskName"]="\$TaskName"]]</Select>
+      </Query>
     </QueryList>
-"@ 
+"@
 
     $errorCount = 0
     $erroredTasks = ""
-    $returnCodeRegex = [regex]'return code (\d+)' 
+    $returnCodeRegex = [regex]'return code (\d+)'
 
     try
     {
@@ -308,11 +331,11 @@ function findlogs() {
         {
             foreach ($event in $events)
             {
-                if (($event.id -eq $stopCode))
+                if ($event.id -eq $stopCode)
                 {
-                    $event.message -match $returnCodeRegex | Out-Null 
+                    $event.message -match $returnCodeRegex | Out-Null
                     $returnCode = $matches[1]
-                    if($returnCode -ne 0)
+                    if ($returnCode -ne 0)
                     {
                         $errorCount++
                     }
@@ -343,7 +366,7 @@ function findlogs() {
 $errorCount = 0
 $errorTasks = ""
 
-$tasks = Get-SchedTasks | Where-Object -FilterScript { $_.Status -ne "Disabled" }
+$tasks = Get-SchedTask | Where-Object -FilterScript { $_.Status -ne "Disabled" }
 $tasks | ForEach-Object -Process { $errorTasks += findlogs $_.Name }
 
 if ($errorTasks -ne "")

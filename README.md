@@ -1,4 +1,5 @@
 # SharePoint Periodic Checks
+
 This repository contains an overview of SharePoint Periodic Checks, checks that need to be
 performed on a daily/weekly/monthly/quarterly basis.
 

@@ -8,44 +8,45 @@ $item | Add-Member -type NoteProperty -Name 'Schedule' -Value 'Daily'
 
 $script:checks += $item
 
-function script:Check13_UpgradeStatusContentDB() {
-    $sb = [Scriptblock]::Create({
-WriteLog "Starting Check 13: Database Upgrade Status check"
-$results.Check13 = ""
-
-$errorCount = 0
-$errorDB = ""
-
-foreach ($webapp in Get-SPWebApplication)
+function script:Check13_UpgradeStatusContentDB()
 {
-    foreach ($contentDB in $webapp.ContentDatabases)
-    {
-        if($contentDB.NeedsUpgrade -eq $true)
-        {
-            $errorCount++
-            if ($errorDB -ne "")
+    $sb = [Scriptblock]::Create( {
+            WriteLog "Starting Check 13: Database Upgrade Status check"
+            $results.Check13 = ""
+
+            $errorCount = 0
+            $errorDB = ""
+
+            foreach ($webapp in Get-SPWebApplication)
             {
-                $errorDB += ", "
+                foreach ($contentDB in $webapp.ContentDatabases)
+                {
+                    if ($contentDB.NeedsUpgrade -eq $true)
+                    {
+                        $errorCount++
+                        if ($errorDB -ne "")
+                        {
+                            $errorDB += ", "
+                        }
+                        $errorDB += $contentDB.Name
+                    }
+                }
             }
-            $errorDB += $contentDB.Name
-        }
-    }
-}
 
-if($errorCount -gt 0)
-{
-    WriteLog "  Check Failed"
-    $results.Check13 = $results.Check13 + "Database Upgrade Status Check: $errorCount database(s) failed`r`n"
-    $results.Check13 = $results.Check13 + "`tDatabases: $errorDB`r`n"
-}
-else
-{
-    WriteLog "  Check Passed"
-    $results.Check13 = $results.Check13 + "Database Upgrade Status Check: Passed`r`n"
-}
+            if ($errorCount -gt 0)
+            {
+                WriteLog "  Check Failed"
+                $results.Check13 = $results.Check13 + "Database Upgrade Status Check: $errorCount database(s) failed`r`n"
+                $results.Check13 = $results.Check13 + "`tDatabases: $errorDB`r`n"
+            }
+            else
+            {
+                WriteLog "  Check Passed"
+                $results.Check13 = $results.Check13 + "Database Upgrade Status Check: Passed`r`n"
+            }
 
-WriteLog "Completed Check 13: Database Upgrade Status check"
-})
+            WriteLog "Completed Check 13: Database Upgrade Status check"
+        })
 
     return $sb.ToString()
 }
