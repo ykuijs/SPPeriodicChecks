@@ -9,67 +9,68 @@ $item | Add-Member -type NoteProperty -Name 'Schedule' -Value 'Daily'
 
 $script:checks += $item
 
-function script:Check31_ServicesCheck() {
-    $sb = [Scriptblock]::Create({
-WriteLog "Starting Check 31: Services check"
-
-$errorServices = ""
-
-$configFolder = "c:\Windows\Monitoring"
-$configFilename = "servicesconfig.txt"
-
-if (-not (Test-Path $configFolder))
+function script:Check31_ServicesCheck()
 {
-    $null = New-Item -Path $configFolder -ItemType Directory
-}
+    $sb = [Scriptblock]::Create( {
+            WriteLog "Starting Check 31: Services check"
 
-$configFile = Join-Path -Path $configFolder -ChildPath $configFilename
-if (-not (Test-Path $configFile))
-{
-    $services = Get-Service
-    $services | select Name, Status | ConvertTo-Csv | Out-File $configFile
-}
+            $errorServices = ""
 
-$configServices = Get-Content $configFile | ConvertFrom-Csv
+            $configFolder = "c:\Windows\Monitoring"
+            $configFilename = "servicesconfig.txt"
 
-$runningServices = Get-Service | select Name, Status
-
-foreach ($configService in $configServices)
-{
-    if ($configService.Status -eq "Running")
-    {
-        $runningService = $runningServices | Where-Object -FilterScript { $_.Name -eq $configService.Name }
-        if ($runningService -ne $null)
-        {
-            if ($configService.Status -ne $runningService.Status)
+            if (-not (Test-Path $configFolder))
             {
-        		if ($errorServices -eq "")
+                $null = New-Item -Path $configFolder -ItemType Directory
+            }
+
+            $configFile = Join-Path -Path $configFolder -ChildPath $configFilename
+            if (-not (Test-Path $configFile))
+            {
+                $services = Get-Service
+                $services | Select-Object Name, Status | ConvertTo-Csv | Out-File $configFile
+            }
+
+            $configServices = Get-Content $configFile | ConvertFrom-Csv
+
+            $runningServices = Get-Service | Select-Object Name, Status
+
+            foreach ($configService in $configServices)
+            {
+                if ($configService.Status -eq "Running")
                 {
-                    $errorServices = "`tFailing services: $($configService.Name)"
-                }
-                else
-                {
-                    $errorServices = "$errorServices, $($configService.Name)" 
+                    $runningService = $runningServices | Where-Object -FilterScript { $_.Name -eq $configService.Name }
+                    if ($null -ne $runningService)
+                    {
+                        if ($configService.Status -ne $runningService.Status)
+                        {
+                            if ($errorServices -eq "")
+                            {
+                                $errorServices = "`tFailing services: $($configService.Name)"
+                            }
+                            else
+                            {
+                                $errorServices = "$errorServices, $($configService.Name)"
+                            }
+                        }
+                    }
                 }
             }
-        }
-    }
-}
 
-if ($errorServices -ne "")
-{
-    WriteLog "  Check Failed"
-    $results.Check31 = $results.Check31 + "Services Check: Failed`r`n"
-    $results.Check31 = $results.Check31 + $errorServices
-}
-else
-{
-    WriteLog "  Check Passed"
-    $results.Check31 = $results.Check31 + "Services Check: Passed`r`n"
-}
+            if ($errorServices -ne "")
+            {
+                WriteLog "  Check Failed"
+                $results.Check31 = $results.Check31 + "Services Check: Failed`r`n"
+                $results.Check31 = $results.Check31 + $errorServices
+            }
+            else
+            {
+                WriteLog "  Check Passed"
+                $results.Check31 = $results.Check31 + "Services Check: Passed`r`n"
+            }
 
-WriteLog "Completed Check 31: Services check"
-})
+            WriteLog "Completed Check 31: Services check"
+        })
 
     return $sb.ToString()
 }

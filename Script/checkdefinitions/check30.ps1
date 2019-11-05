@@ -8,14 +8,15 @@ $item | Add-Member -type NoteProperty -Name 'Schedule' -Value 'Daily'
 
 $script:checks += $item
 
-function script:Check30_LastBootTime() {
-    $sb = [Scriptblock]::Create({
-WriteLog "Starting Check 30: Last Boot Time check"
-$lastBootTime = [Management.ManagementDateTimeConverter]::ToDateTime((Get-WMIObject -Class win32_operatingsystem).LastBootUpTime)
-$results.Check30 = "Last Boot Time: $lastBootTime"
+function script:Check30_LastBootTime()
+{
+    $sb = [Scriptblock]::Create( {
+            WriteLog "Starting Check 30: Last Boot Time check"
+            $lastBootTime = (Get-CIMInstance -Class win32_operatingsystem).LastBootUpTime
+            $results.Check30 = "Last Boot Time: $lastBootTime"
 
-WriteLog "Completed Check 30: Last Boot Time check"
-})
+            WriteLog "Completed Check 30: Last Boot Time check"
+        })
 
     return $sb.ToString()
 }

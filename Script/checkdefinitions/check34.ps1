@@ -8,51 +8,52 @@ $item | Add-Member -type NoteProperty -Name 'Schedule' -Value 'Daily'
 
 $script:checks += $item
 
-function script:Check34_GroupCheck() {
+function script:Check34_GroupCheck()
+{
     WriteLog "    Starting Check 34: Group check"
-    if ($results.Remote -eq $null)
+    if ($null -eq $results.Remote)
     {
-        $results.Remote = @{}
+        $results.Remote = @{ }
     }
-    
+
     $results.Remote.Check34 = ""
 
     $errorCount = 0
     $errorGroup = ""
 
-    # Get the user's Distinguished Name 
-    function Get-DistinguishedName ($strUserName) 
-    {  
-        $searcher = New-Object System.DirectoryServices.DirectorySearcher([ADSI]'') 
-        $searcher.Filter = "(&(samAccountName=$strUserName))" 
-        $result = $searcher.FindOne() 
- 
+    # Get the users Distinguished Name
+    function Get-DistinguishedName($strUserName)
+    {
+        $searcher = New-Object System.DirectoryServices.DirectorySearcher([ADSI]'')
+        $searcher.Filter = "(&(samAccountName=$strUserName))"
+        $result = $searcher.FindOne()
+
         if ($null -eq $result)
         {
             return $null
         }
         else
         {
-            return $result.GetDirectoryEntry().DistinguishedName 
+            return $result.GetDirectoryEntry().DistinguishedName
         }
     }
 
-    function Get-ADGroup ($strGroupName) 
-    {  
-        $searcher = New-Object System.DirectoryServices.DirectorySearcher([ADSI]'') 
-        $searcher.Filter = "(&(objectClass=Group)(samAccountName=$strGroupName))" 
-        $result = $searcher.FindOne() 
- 
-        return $result
+    function Get-ADGroup($strGroupName)
+    {
+        $searcher = New-Object System.DirectoryServices.DirectorySearcher([ADSI]'')
+        $searcher.Filter = "(&(objectClass=Group)(samAccountName=$strGroupName))"
+        $result = $searcher.FindOne()
+
+        return $result
     }
 
     WriteLog "      Reading groups configuration file"
     $ConfigFile = Join-Path -Path $scriptpath -ChildPath "config\groups.txt"
-    $config = Import-Csv $ConfigFile
+    $config = Import-Csv -Path $ConfigFile
     $uniquegroups = $config.groupname | Sort-Object | Get-Unique
     $uniqueusers = $config.useraccount | Sort-Object | Get-Unique
 
-    $userDNs = @{}
+    $userDNs = @{ }
     foreach ($user in $uniqueusers)
     {
         $dn = Get-DistinguishedName $user
@@ -86,7 +87,7 @@ function script:Check34_GroupCheck() {
                 $actualMembers += $member
             }
         }
-    
+
         $groupconfig = $config | Where-Object -FilterScript { $_.groupname -eq $groupname }
         foreach ($item in $groupconfig)
         {
@@ -114,13 +115,15 @@ function script:Check34_GroupCheck() {
             if ($null -ne $result)
             {
                 $errorCount++
-                if ($errorGroup -ne "") { $errorGroup += ", " }
+                if ($errorGroup -ne "")
+                { $errorGroup += ", "
+                }
                 $errorGroup += $groupname
             }
         }
     }
 
-    if($errorCount -gt 0)
+    if ($errorCount -gt 0)
     {
         WriteLog "      Check Failed"
         $results.Remote.Check34 = $results.Remote.Check34 + "Group Check: $errorCount group(s) failed`r`n"

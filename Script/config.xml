@@ -20,11 +20,10 @@
         <ReportsToDisk>false</ReportsToDisk>
         <ReportsFolder>.\Reports</ReportsFolder>
     </Reporting>
-    <MBSA>
-        <MBSAPath>C:\Program Files\Microsoft Baseline Security Analyzer 2</MBSAPath>
+    <PatchScan>
         <WSUSCabPath>.</WSUSCabPath>
         <DownloadWSUSFile>false</DownloadWSUSFile>
-    </MBSA>
+    </PatchScan>
     <Logging>
         <LogPrefix>PeriodicChecks</LogPrefix>
         <LogFolder>Logs</LogFolder>

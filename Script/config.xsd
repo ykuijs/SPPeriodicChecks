@@ -39,10 +39,9 @@
             </xs:sequence>
           </xs:complexType>
         </xs:element>
-        <xs:element name="MBSA" minOccurs="1">
+        <xs:element name="PatchScan" minOccurs="1">
           <xs:complexType>
             <xs:sequence>
-              <xs:element type="xs:string" name="MBSAPath" minOccurs="1" />
               <xs:element type="xs:string" name="WSUSCabPath" minOccurs="1" />
               <xs:element type="xs:boolean" name="DownloadWSUSFile" minOccurs="1" />
             </xs:sequence>

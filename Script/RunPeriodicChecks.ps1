@@ -1,9 +1,9 @@
-﻿#requires -version 4.0
+﻿#requires -version 5.0
 
-<#  
-.SYNOPSIS  
+<#
+.SYNOPSIS
     Running various SharePoint environment checks to validate the environment doesn't have any issues.
-.DESCRIPTION  
+.DESCRIPTION
     This script performs various SharePoint checks to validate that the SharePoint servers and environment
     doesn't have any issues. The script usually runs once a day and sends an e-mail report to a configured
     e-mail address.
@@ -20,6 +20,9 @@
 .EXAMPLE
     .\RunPeriodicChecks.ps1
     Run the script
+.EXAMPLE
+    .\RunPeriodicChecks.ps1 -Full
+    Run all of the available tests (ignore the schedule of each test)
 .REQUIRED_FILE
     .\config.xml
     Configuration file for the script
@@ -34,12 +37,12 @@
     Configuration file with all urls which need to be checked
 .REQUIRED_FILE
     .\config\excludedpatches.txt
-    Configuration file with all patches that have to be excluded from the MBSA reporting
-.NOTES  
+    Configuration file with all patches that have to be excluded from the Missing Patch reporting
+.NOTES
     File Name     : RunPeriodicChecks.ps1
     Author        : Yorick Kuijs
-    Version       : 1.0.15
-	Last Modified : 15-7-2019
+    Version       : 1.0.16
+	Last Modified : 5-11-2019
 .EXITCODES
     0 : No errors encountered
     10: Cannot find config.xml file
@@ -50,48 +53,9 @@
     60: No password configured in config.xml file
     70: Configuration folder not found
     80: Specific configuration file not found
-.CHANGES
-    v1.0 - Initial release
-    v1.1 - Added ServersSQL parameter
-    v1.2 - Added timeout to Wait-Job, so it won't wait indefinitely. Corrected some code styling issues (config.xml changes)
-    v1.3 - Added errored server logging
-    v1.4 - Updated error logging and fixed issue in check W4
-    v1.5 - Added Group membership test, updated checks 1 and W4
-    v1.6 - Improved job logging (added job duration)
-    v1.7 - Added Policy Compliance check (Large Lists and Versioning limits)
-         - Added option to store report on disk (config.xml changes)
-         - Added XML validation
-    v1.8 - Added NULL check to check 21
-    v1.9 - Added new check (17, ServiceApp status)
-    v1.10 - Updated documentation (MBSA check and CredSSP prereqs), fixed naming issue in check 17
-    v1.11 - Added possibility to use multiple email addresses, separated with comma
-          - Added check for valid email address
-          - Improved script relative path support. The script now ensures all files and folders are found in the script folder
-          - Added validation of server configuration
-          - Added exitcodes
-          - Added information about debug the script to the documentation
-          - Added Distributed Cache check
-    v1.12 - Improved MBSA check logging to show reason of a failed scan
-          - Fixed script duration per server calculation issue
-          - Updated wait procedure to display how many servers have completed
-          - Updated MBSA check to leave the reports when Debug is set to True
-          - Added ".NET v4.0" and ".NET v4.0 Classic" application pools to default ignored application pools
-          - Added check to validate if the user has sufficient permissions to use PowerShell with SharePoint (Only for servers where Role=SP)
-          - Added check if SharePoint plugin exists (Only for servers where Role=SP)
-          - Added check if Distributed Cache module can be found
-    v1.13 - Added possibility to configure CC and BCC addresses as report recipients
-    v1.14 - Added Full parameter to enable the possiblity to force run all checks
-          - Updated Distributed Cache check (check 18) to first validate if the DC is actually running on the specified server
-          - Updated URLCheck (check 1) to allow authentication against an ADFS/Windows Claims environment
-    v1.15 - Removed obsolete parameter Search String in url.txt file
-          - Added folder and file checks to make sure required configuration files really exist
-          - Added Config parameter to enable the possibility to specify custom configuration file
-          - Improved "Failed Timer Jobs" check to make it more efficient
-          - Minor bugfixes
-    v1.16 - Fixed bug with reading config file, introduces in v1.15
 
 .LINK
-	N/A
+    https://github.com/ykuijs/SPPeriodicChecks
 #>
 
 [CmdletBinding()]
@@ -107,7 +71,7 @@ param(
 
 function WriteLog()
 {
-# Logging function - Write logging to screen and log file
+    # Logging function - Write logging to screen and log file
     param
     (
         [parameter(Mandatory = $true)]
@@ -119,10 +83,11 @@ function WriteLog()
     Add-Content -Path $logfile -Value "$date - $message"
 }
 
-function Validate-XML()
+function Confirm-XML()
 {
-# Validate XML Schema based on inline schema
-    param (
+    # Validate XML Schema based on inline schema
+    param
+    (
         [System.String]
         $xmlFileName
     )
@@ -137,19 +102,21 @@ function Validate-XML()
     $readerSettings = New-Object -TypeName System.Xml.XmlReaderSettings
     $readerSettings.ValidationType = [System.Xml.ValidationType]::Schema
     $readerSettings.ValidationFlags = [System.Xml.Schema.XmlSchemaValidationFlags]::ProcessInlineSchema -bor `
-                                      [System.Xml.Schema.XmlSchemaValidationFlags]::ProcessSchemaLocation
+        [System.Xml.Schema.XmlSchemaValidationFlags]::ProcessSchemaLocation
     $readerSettings.add_ValidationEventHandler(
-    {
-        # Triggered each time an error is found in the XML file
-        $Host.UI.WriteErrorLine("ERROR: Error found in XML: $($_.Message)`n")
-        $script:errorCount++
-    });
+        {
+            # Triggered each time an error is found in the XML file
+            $Host.UI.WriteErrorLine("ERROR: Error found in XML: $($_.Message)`n")
+            $script:errorCount++
+        });
     $reader = [System.Xml.XmlReader]::Create($XmlFile.FullName, $readerSettings)
-    while ($reader.Read()) { }
+    while ($reader.Read())
+    {
+    }
     $reader.Close()
 
     # Verify the results of the XSD validation
-    if($script:errorCount -gt 0)
+    if ($script:errorCount -gt 0)
     {
         # XML is NOT valid
         return $false
@@ -164,7 +131,7 @@ function Validate-XML()
 function Test-ValidConfiguration
 {
     param (
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         $ServerConfig
     )
 
@@ -203,12 +170,12 @@ function Test-ValidConfiguration
     WriteLog "  Completed validating server configuration"
 }
 
-function Validate-EmailAddress
+function Confirm-EmailAddress
 {
-# Returns if a string is a valid email address. Will also check all the elements of an array of email addresses.
+    # Returns if a string is a valid email address. Will also check all the elements of an array of email addresses.
     param
     (
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [System.String]
         $EmailAddress
     )
@@ -229,7 +196,7 @@ function Validate-EmailAddress
 
 function ReadConfiguration()
 {
-# Read configuration function - Read the configuration from a CSV input file and store it in the specified variable
+    # Read configuration function - Read the configuration from a CSV input file and store it in the specified variable
     param
     (
         [parameter(Mandatory = $true)]
@@ -254,7 +221,7 @@ function ReadConfiguration()
 
 function ReadCheckFiles()
 {
-# Read Check file function - Read and import all Check Definition files from the checkdefinitions folder.
+    # Read Check file function - Read and import all Check Definition files from the checkdefinitions folder.
     param ()
 
     WriteLog "  Reading check definitions"
@@ -269,7 +236,7 @@ function ReadCheckFiles()
 
 function InitializeScriptVariable()
 {
-# Variable initialization function - Initialize the scripts variables with the loading of the required SharePoint plugin
+    # Variable initialization function - Initialize the scripts variables with the loading of the required SharePoint plugin
     param
     (
         [parameter(Mandatory = $true)]
@@ -284,8 +251,8 @@ function InitializeScriptVariable()
         if ($server.role -eq "SP")
         {
             $scripts.($server.servername) = $scripts.($server.servername) + `
-                                            "if (`$null -eq (Get-PSSnapin -Name Microsoft.SharePoint.PowerShell -ErrorAction SilentlyContinue)) {`r`n`tif (`$null -ne (Get-PSSnapin -Registered -Name Microsoft.SharePoint.PowerShell -ErrorAction SilentlyContinue))`r`n`t{`r`n`t`tAdd-PSSnapin Microsoft.SharePoint.PowerShell -ErrorAction SilentlyContinue`r`n`t}`r`n`telse`r`n`t{`r`n`t`treturn `"[ERROR] ERROR LOADING POWERSHELL PLUGIN`"`r`n`t}`r`n}`r`n`r`n" + `
-                                            "`$farm = Get-SPFarm -ErrorAction SilentlyContinue`r`nif (`$null -eq `$farm) {`r`n`tWriteLog `"[ERROR] Error connecting to farm. Check if you have the correct permissions`"`r`n`treturn `"[ERROR] ERROR CONNECTING TO FARM`"`r`n}`r`n`r`n"
+                "if (`$null -eq (Get-PSSnapin -Name Microsoft.SharePoint.PowerShell -ErrorAction SilentlyContinue)) {`r`n`tif (`$null -ne (Get-PSSnapin -Registered -Name Microsoft.SharePoint.PowerShell -ErrorAction SilentlyContinue))`r`n`t{`r`n`t`tAdd-PSSnapin Microsoft.SharePoint.PowerShell -ErrorAction SilentlyContinue`r`n`t}`r`n`telse`r`n`t{`r`n`t`treturn `"[ERROR] ERROR LOADING POWERSHELL PLUGIN`"`r`n`t}`r`n}`r`n`r`n" + `
+                "`$farm = Get-SPFarm -ErrorAction SilentlyContinue`r`nif (`$null -eq `$farm) {`r`n`tWriteLog `"[ERROR] Error connecting to farm. Check if you have the correct permissions`"`r`n`treturn `"[ERROR] ERROR CONNECTING TO FARM`"`r`n}`r`n`r`n"
         }
         $checkServer.($server.servername) = $false
     }
@@ -294,7 +261,7 @@ function InitializeScriptVariable()
 
 function FinalizeScriptVariable()
 {
-# Finalize the script variables function - Finalize the scripts variable to make sure it returns the gathered information
+    # Finalize the script variables function - Finalize the scripts variable to make sure it returns the gathered information
     param
     (
         [parameter(Mandatory = $true)]
@@ -312,7 +279,7 @@ function FinalizeScriptVariable()
 
 function GenerateFunctionName()
 {
-# Check function name generation function - Generate the check function names, to they can be executed by the AddCheckscriptForServer function
+    # Check function name generation function - Generate the check function names, to they can be executed by the AddCheckscriptForServer function
     param
     (
         [parameter(Mandatory = $true)]
@@ -325,25 +292,25 @@ function GenerateFunctionName()
 
 function AddCheckscriptForServer()
 {
-# Add check script for a specific server function - Add the check script to the scripts variable for the specified server
+    # Add check script for a specific server function - Add the check script to the scripts variable for the specified server
     param
     (
         [parameter(Mandatory = $true)]
         [PSCustomObject]
         $check,
-        
+
         [parameter(Mandatory = $true)]
         [string]
         $server
     )
 
     WriteLog "        Start AddCheckscriptForServer"
-    
+
     WriteLog "          Check is $($check.Check)"
     $functionName = GenerateFunctionName $check
-    $checkscript  = & $functionName
+    $checkscript = & $functionName
 
-    $scripts.$server     = $scripts.$server + $checkscript.ToString()
+    $scripts.$server = $scripts.$server + $checkscript.ToString()
     $checkServer.$server = $true
 
     WriteLog "        Completed AddCheckscriptForServer"
@@ -351,76 +318,81 @@ function AddCheckscriptForServer()
 
 function GenerateScripts()
 {
-# Generate check scripts function - Generate the check scripts for a specific check
+    # Generate check scripts function - Generate the check scripts for a specific check
     param (
         [System.Array]
         $localChecks
     )
     WriteLog "  Start generating check scripts for all local checks"
 
-    foreach($check in $localChecks)
+    foreach ($check in $localChecks)
     {
         WriteLog "    Generating check scripts for $($check.ID) - $($check.Description)"
         switch ($check.Target.ToLower())
         {
-            "farm" {
+            "farm"
+            {
                 # Get all available farms
                 $farms = $ServerConfig.farm | Sort-Object | Get-Unique
 
                 # Loop through each farm
-                foreach($farm in $farms)
+                foreach ($farm in $farms)
                 {
                     WriteLog "    Processing farm `"$farm`""
                     # Find the Central Admin server in the specific farm
                     $servers = $ServerConfig | Where-Object -FilterScript { $_.farm -eq $farm } `
-                                             | Where-Object -FilterScript { $_.centraladmin -eq "yes" } `
-                                             | Select-Object -First 1
+                    | Where-Object -FilterScript { $_.centraladmin -eq "yes" } `
+                    | Select-Object -First 1
                     $caserver = $servers.servername
 
                     AddCheckscriptForServer $check $caserver
                 }
             }
-        
-            "serverssp" {
+
+            "serverssp"
+            {
                 # Get all SharePoint servers
                 $servers = $ServerConfig | Where-Object -FilterScript { $_.role -eq "SP" }
-            
+
                 # Loop through each server
-                foreach($server in $servers)
+                foreach ($server in $servers)
                 {
                     WriteLog "      Processing server `"$($server.servername)`""
                     AddCheckscriptForServer $check $server.servername
                 }
             }
-        
-            "serverssql" {
+
+            "serverssql"
+            {
                 # Get all SQL servers
                 $servers = $ServerConfig | Where-Object -FilterScript { $_.role -eq "SQL" }
-            
+
                 # Loop through each server
-                foreach($server in $servers)
+                foreach ($server in $servers)
                 {
                     WriteLog "      Processing server `"$($server.servername)`""
                     AddCheckscriptForServer $check $server.servername
                 }
             }
-            
-            "serversall" {
+
+            "serversall"
+            {
                 # Loop through each server
-                foreach($server in $ServerConfig)
+                foreach ($server in $ServerConfig)
                 {
                     WriteLog "      Processing server `"$($server.servername)`""
                     AddCheckscriptForServer $check $server.servername
-                }            
+                }
             }
-        
-            "urls" { 
+
+            "urls"
+            {
                 # Loop through each URL
-                foreach($url in $urls)
+                foreach ($url in $urls)
                 {
                     WriteLog "      Processing url `"$($url.URL)`""
                     #Remote Check, so do nothing
-                }            
+                }
             }
         }
         WriteLog "    Completed generating scripts"
@@ -431,7 +403,7 @@ function GenerateScripts()
 
 function RunScripts()
 {
-# Run check scripts function - Run all check scripts on all servers as a job
+    # Run check scripts function - Run all check scripts on all servers as a job
     param (
         [System.Management.Automation.PSCredential]
         $credential
@@ -439,12 +411,12 @@ function RunScripts()
 
     WriteLog "  Start running the scripts on the servers"
     $jobs = @()
-    foreach($server in $scripts.Keys)
+    foreach ($server in $scripts.Keys)
     {
         WriteLog "    Running script on server $server"
 
         $scriptblock = [ScriptBlock]::Create($scripts.$server)
-        if($checkServer.$server)
+        if ($checkServer.$server)
         {
             try
             {
@@ -475,11 +447,11 @@ function RunScripts()
             {
                 $null = New-Item -Path $debugpath -Type directory
             }
-            
+
             $debugfile = Join-Path -Path $debugpath -ChildPath "$server.txt"
             if (Test-Path $debugfile)
             {
-            `	Remove-Item -Path $debugfile
+                Remove-Item -Path $debugfile
             }
             Add-Content -Path $debugfile -Value $scripts.$server
         }
@@ -509,7 +481,8 @@ function RunScripts()
 
         switch ($jobState)
         {
-            "Completed" {
+            "Completed"
+            {
                 $results.$server = Receive-Job -Job $job
                 if ($results.$server -is [System.String] -and $results.$server -like "*[ERROR]*")
                 {
@@ -525,7 +498,8 @@ function RunScripts()
                     }
                 }
             }
-            "Running" {
+            "Running"
+            {
                 WriteLog "      [ERROR] Time-out occurred during check of server $server - Job state is Running"
 
                 $script:erroredServersCount++
@@ -538,7 +512,8 @@ function RunScripts()
                     $script:erroredServers += ", " + $server
                 }
             }
-            "Failed" {
+            "Failed"
+            {
                 WriteLog "      [ERROR] Error occurred during check of server $server - Job state is Failed"
                 $jobresult = $job.ChildJobs[0].JobStateInfo.Reason.ErrorRecord
                 WriteLog "        Error message: $jobresult"
@@ -553,7 +528,8 @@ function RunScripts()
                     $script:erroredServers += ", " + $server
                 }
             }
-            Default {
+            Default
+            {
                 WriteLog "      [ERROR] Error occurred during check of server $server - Job state is $jobState"
 
                 $script:erroredServersCount++
@@ -584,7 +560,7 @@ function RunScripts()
     # Clean up all open sessions
     try
     {
-        Get-PSSession -Name "SharePoint.PeriodicChecks" | Remove-PSSession
+        Get-PSSession -Name "SharePoint.PeriodicChecks" -ErrorAction SilentlyContinue | Remove-PSSession
     }
     catch
     {
@@ -597,14 +573,14 @@ function RunScripts()
 
 function RunRemoteChecks()
 {
-# Run all remote checks function - Run all remote checks on all servers / environments
+    # Run all remote checks function - Run all remote checks on all servers / environments
     param (
         [System.Array]
         $remoteChecks
     )
     WriteLog "  Start executing remote checks"
 
-    foreach($check in $remoteChecks)
+    foreach ($check in $remoteChecks)
     {
         WriteLog "    Executing remote check $($check.ID) - $($check.Description)"
 
@@ -612,55 +588,60 @@ function RunRemoteChecks()
 
         switch ($check.Target.ToLower())
         {
-            "farm" {
+            "farm"
+            {
                 # Get all available farms
                 $farms = $ServerConfig.farm | Sort-Object | Get-Unique
 
                 # Loop through each farm
-                foreach($farm in $farms)
+                foreach ($farm in $farms)
                 {
                     WriteLog "    Processing farm `"$farm`""
                     # Find the Central Admin server in the specific farm
                     $servers = $ServerConfig | Where-Object -FilterScript { $_.farm -eq $farm } `
-                                             | Where-Object -FilterScript { $_.centraladmin -eq "yes" }
-                    $caserver = $servers.servername
+                    | Where-Object -FilterScript { $_.centraladmin -eq "yes" }
+                    #$caserver = $servers.servername
 
                     & $functionName $servers
                 }
             }
-        
-            "serverssp" {
+
+            "serverssp"
+            {
                 # Get all SharePoint servers
                 $servers = $ServerConfig | Where-Object -FilterScript { $_.role -eq "SP" }
 
                 & $functionName $servers
-            
+
                 # Loop through each server
-                foreach($server in $servers)
+                foreach ($server in $servers)
                 {
                     WriteLog "      Processing server `"$($server.servername)`""
                 }
             }
-        
-            "serverssql" {
+
+            "serverssql"
+            {
                 # Get all SQL servers
                 $servers = $ServerConfig | Where-Object -FilterScript { $_.role -eq "SQL" }
 
                 & $functionName $servers
-            
+
                 # Loop through each server
-                foreach($server in $servers)
+                foreach ($server in $servers)
                 {
                     WriteLog "      Processing server `"$($server.servername)`""
                 }
             }
 
-            "serversall" {
+            "serversall"
+            {
                 # Loop through each server
                 & $functionName $ServerConfig
             }
-        
-            "urls" { 
+
+            "urls"
+            {
                 # Loop through each URL
                 & $functionName
             }
@@ -673,17 +654,19 @@ function RunRemoteChecks()
 
 function AnalyzeResults()
 {
-# Analyze results function - Analyze the results from all checks and generate the report.
+    # Analyze results function - Analyze the results from all checks and generate the report.
     param (
         [System.Array]
         $runChecks
     )
 
+    $date = Get-Date -Format "yyyy-MM-dd"
     WriteLog "  Start data analysis"
-    $analysis = "<html>`r`n<head>`r`n  <title></title>`r`n"
+    $analysis = "<html>`r`n<head>`r`n  <title>Periodic Check Report - $date</title>`r`n"
     $analysis += "<style>table, th, td { border: 1px solid black; border-collapse: collapse; } th, td { padding: 10px; } th { background-color: #f1f1c1; } .failed {background-color: red;}</style>"
     $analysis += "</head>`r`n<body>`r`n"
 
+    $analysis += "<h2>Periodic Check Report - $date</h2>`r`n"
     $analysis += "<h3>Summary</h3>`r`n"
     $analysis += "<table>`r`n<tr><td>Start time</td><td>$start</td></tr>`r`n"
     $analysis += "<tr><td>End time</td><td>$(Get-Date)</td></tr>`r`n</table>`r`n"
@@ -710,7 +693,7 @@ function AnalyzeResults()
         $analysis += "<h2>Check $id - $($check.Description) - $($check.Schedule)</h2>`r`n"
         $analysis += "<table>`r`n<tr><th>Server</th><th>Result</th></tr>`r`n"
 
-        foreach($server in $results.Keys)
+        foreach ($server in $results.Keys)
         {
             if ($check.Target -eq "Farm")
             {
@@ -720,7 +703,7 @@ function AnalyzeResults()
             {
                 $source = $server
             }
-            
+
             if ($null -ne $results.$server."Check$id")
             {
                 $result = $results.$server."Check$id"
@@ -747,9 +730,9 @@ function AnalyzeResults()
 
 function ProcessReport()
 {
-# Process report information function
-# - Send the generated report via e-mail to a specified e-mail address
-# - Store the generated report to disk
+    # Process report information function
+    # - Send the generated report via e-mail to a specified e-mail address
+    # - Store the generated report to disk
     param (
         [System.String]
         $report
@@ -767,10 +750,10 @@ function ProcessReport()
                 $debugreportfile = Join-Path -Path $scriptpath -ChildPath "report.htm"
                 if (Test-Path -Path $debugreportfile)
                 {
-                `	Remove-Item -Path $debugreportfile
+                    Remove-Item -Path $debugreportfile
                 }
-            
-                Add-Content -Path $debugreportfile -Value $report 
+
+                Add-Content -Path $debugreportfile -Value $report
                 WriteLog "      Report stored to $debugreportfile"
             }
             else
@@ -780,20 +763,20 @@ function ProcessReport()
                     From       = $mailfrom
                     Subject    = "Periodic Checks Report $date"
                     SmtpServer = $smtpserver
-                    Body       = $report 
+                    Body       = $report
                 }
 
                 if ($mailcc.Count -gt 0)
                 {
-                    $params.Add("CC",$mailcc)
+                    $params.Add("CC", $mailcc)
                 }
 
                 if ($mailbcc.Count -gt 0)
                 {
-                    $params.Add("BCC",$mailbcc)
+                    $params.Add("BCC", $mailbcc)
                 }
                 Send-MailMessage @params -BodyAsHtml -ErrorAction Stop
-                
+
                 $recipients = $mailto
                 if ($mailcc.Count -gt 0)
                 {
@@ -824,10 +807,10 @@ function ProcessReport()
         if (Test-Path -Path $reportfile)
         {
             WriteLog "      Report file already exists. Removing"
-        `	Remove-Item -Path $reportfile
+            Remove-Item -Path $reportfile
         }
-            
-        Add-Content -Path $reportfile -Value $report 
+
+        Add-Content -Path $reportfile -Value $report
         WriteLog "      Report stored to $reportfile"
         WriteLog "    Completed storing report to disk"
     }
@@ -851,8 +834,8 @@ $configName = $Config.TrimEnd(".xml")
 $configFile = Join-Path -Path $scriptpath -ChildPath $Config
 if (Test-Path -Path $configFile)
 {
-    $appConfig  = [xml](Get-Content -Path $configFile)
-    if (-not (Validate-XML -xmlFileName $configFile))
+    $appConfig = [xml](Get-Content -Path $configFile)
+    if (-not (Confirm-XML -xmlFileName $configFile))
     {
         $Host.UI.WriteErrorLine("[ERROR]: Config file $configFile not valid! Please make sure it matches the schema!")
         exit 20
@@ -883,21 +866,27 @@ WriteLog "Starting script preparations"
 
 
 # Initialize script variables
-$start               = Get-Date
-$today               = $start
-$scripts             = @{}
-$results             = @{}
-$checkServer         = @{}
-$erroredServers      = ""
+$start = Get-Date
+$today = $start
+$scripts = @{ }
+$results = @{ }
+$checkServer = @{ }
+$erroredServers = ""
 $erroredServersCount = 0
 
 # Read config variables
 $remoteLogPath = $appConfig.AppSettings.Logging.RemoteLogFolder
 
-## MBSA variables
-$MBSAPath         = $appConfig.AppSettings.MBSA.MBSAPath
-$WSUSCabPath      = $appConfig.AppSettings.MBSA.WSUSCabPath # http://go.microsoft.com/fwlink/?LinkID=74689
-$downloadWSUSFile = [System.Convert]::ToBoolean($appConfig.AppSettings.MBSA.DownloadWSUSFile)
+## PatchScan variables
+if ($appConfig.AppSettings.PatchScan.WSUSCabPath -eq '.')
+{
+    $WSUSCabPath = $PSScriptRoot
+}
+else
+{
+    $WSUSCabPath = $appConfig.AppSettings.PatchScan.WSUSCabPath # http://go.microsoft.com/fwlink/?LinkID=74689
+}
+$downloadWSUSFile = [System.Convert]::ToBoolean($appConfig.AppSettings.PatchScan.DownloadWSUSFile)
 
 ## General variables
 $debug = [System.Convert]::ToBoolean($appConfig.AppSettings.General.Debug)
@@ -934,7 +923,7 @@ if ($reportsViaEmail -eq $true)
     $mailto = @()
     foreach ($emailAddress in ($appConfig.AppSettings.Email.MailTo -split ","))
     {
-        if (Validate-EmailAddress $emailAddress)
+        if (Confirm-EmailAddress $emailAddress)
         {
             $mailto += $emailAddress
         }
@@ -945,7 +934,7 @@ if ($reportsViaEmail -eq $true)
     {
         foreach ($emailAddress in ($appConfig.AppSettings.Email.MailCC -split ","))
         {
-            if (Validate-EmailAddress $emailAddress)
+            if (Confirm-EmailAddress $emailAddress)
             {
                 $mailcc += $emailAddress
             }
@@ -957,7 +946,7 @@ if ($reportsViaEmail -eq $true)
     {
         foreach ($emailAddress in ($appConfig.AppSettings.Email.MailBCC -split ","))
         {
-            if (Validate-EmailAddress $emailAddress)
+            if (Confirm-EmailAddress $emailAddress)
             {
                 $mailbcc += $emailAddress
             }
@@ -968,7 +957,7 @@ if ($reportsViaEmail -eq $true)
         WriteLog "**** [ERROR]: No valid To email addresses specified!"
         exit 50
     }
-    $mailfrom   = $appConfig.AppSettings.Email.MailFrom
+    $mailfrom = $appConfig.AppSettings.Email.MailFrom
     $smtpserver = $appConfig.AppSettings.Email.SMTPServer
 }
 
@@ -978,9 +967,9 @@ WriteLog "Starting checks"
 $configPath = Join-Path -Path $scriptpath -ChildPath $configName
 if (Test-Path -Path $configPath)
 {
-    $urls            = ReadConfiguration (Join-Path -Path $configPath -ChildPath "urls.txt")
+    $urls = ReadConfiguration (Join-Path -Path $configPath -ChildPath "urls.txt")
     $excludedpatches = ReadConfiguration (Join-Path -Path $configPath -ChildPath "patchexclusions.txt")
-    $ServerConfig    = ReadConfiguration (Join-Path -Path $configPath -ChildPath "servers.txt")
+    $ServerConfig = ReadConfiguration (Join-Path -Path $configPath -ChildPath "servers.txt")
     Test-ValidConfiguration -ServerConfig $ServerConfig
 }
 else
@@ -1049,7 +1038,7 @@ if (-not ([String]::IsNullOrWhiteSpace($appConfig.AppSettings.Credentials.Passwo
 {
     $pw = $appConfig.AppSettings.Credentials.Password | ConvertTo-SecureString
     $cred = New-Object -TypeName System.Management.Automation.PSCredential `
-                       -ArgumentList $appConfig.AppSettings.Credentials.UserName, $pw
+        -ArgumentList $appConfig.AppSettings.Credentials.UserName, $pw
 }
 else
 {

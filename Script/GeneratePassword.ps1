@@ -1,4 +1,5 @@
-﻿function Test-Credential {
+﻿function Test-Credential
+{
     <#
     .SYNOPSIS
         Takes a PSCredential object and validates it against the domain (or local machine, or ADAM instance).
@@ -14,26 +15,31 @@
 
     #>
     param(
-        [parameter(Mandatory=$true,ValueFromPipeline=$true)]
+        [parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [System.Management.Automation.PSCredential]$credential,
-        [parameter()][validateset('Domain','Machine','ApplicationDirectory')]
+        [parameter()][validateset('Domain', 'Machine', 'ApplicationDirectory')]
         [string]$context = 'Domain'
     )
-    begin {
+    begin
+    {
         Add-Type -assemblyname system.DirectoryServices.accountmanagement
-        $DS = New-Object System.DirectoryServices.AccountManagement.PrincipalContext([System.DirectoryServices.AccountManagement.ContextType]::$context) 
+        $DS = New-Object System.DirectoryServices.AccountManagement.PrincipalContext([System.DirectoryServices.AccountManagement.ContextType]::$context)
     }
-    process {
+    process
+    {
         $account = Split-Path -Path $credential.UserName -Leaf
         $DS.ValidateCredentials($account, $credential.GetNetworkCredential().password)
     }
-} 
+}
 
 $cred = Get-Credential
 
-if (Test-Credential $cred) {
+if (Test-Credential $cred)
+{
     $cred.Password | ConvertFrom-SecureString | Out-File password.txt
     Write-Output "Password stored!"
-} else {
+}
+else
+{
     Write-Error "Specified credentials invalid"
 }

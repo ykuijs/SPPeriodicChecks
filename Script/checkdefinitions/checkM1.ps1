@@ -1,294 +1,257 @@
 ﻿$item = New-Object PSObject
 $item | Add-Member -type NoteProperty -Name 'ID' -Value 'M1'
-$item | Add-Member -type NoteProperty -Name 'Check' -Value 'MBSACheck'
-$item | Add-Member -type NoteProperty -Name 'Description' -Value 'Missing patches check'
+$item | Add-Member -type NoteProperty -Name 'Check' -Value 'PatchCheck'
+$item | Add-Member -type NoteProperty -Name 'Description' -Value 'Missing Patch check'
 $item | Add-Member -type NoteProperty -Name 'Target' -Value 'ServersAll'
 $item | Add-Member -type NoteProperty -Name 'Type' -Value 'Remote'
 $item | Add-Member -type NoteProperty -Name 'Schedule' -Value 'Monthly'
 
 $script:checks += $item
 
-function script:Download-WSUSFile() {
-    Write-Verbose "        Started downloading WSUSSCN2.CAB file"
+function script:Save-WSUSFile()
+{
+    WriteLog "        Started downloading WSUSSCN2.CAB file"
     $url = "http://go.microsoft.com/fwlink/?LinkID=74689"
     $destination = Join-Path -Path $WSUSCabPath -ChildPath "wsusscn2.cab"
 
-    if (Test-Path -Path $destination)
+    $wsusscn2Properties = Get-ItemProperty -Path $destination
+    if ($wsusscn2Properties.LastWriteTime -lt (Get-Date).AddDays(-7))
     {
-        Remove-Item -Path $destination -ErrorAction SilentlyContinue
-        Remove-Item -Path "$destination.dat" -ErrorAction SilentlyContinue
+        WriteLog "           Downloading file to $destination"
+        if (Test-Path -Path $destination)
+        {
+            Remove-Item -Path $destination -ErrorAction SilentlyContinue
+            Remove-Item -Path "$destination.dat" -ErrorAction SilentlyContinue
+        }
+
+        try
+        {
+            $wc = New-Object System.Net.WebClient
+            $wc.DownloadFile($url, $destination)
+            WriteLog "        Completed downloading WSUSSCN2.CAB file"
+        }
+        catch
+        {
+            WriteLog " [ERROR] Error while downloading WSUSSCN2.CAB file: $($_.Exception)"
+            return $false
+        }
+    }
+    else
+    {
+        WriteLog "          Already downloaded a copy of WSUSSCN2.CAB in the last seven days. Skipping download!"
     }
 
-    Invoke-WebRequest -Uri $url -OutFile $destination
-    Write-Verbose "        Completed downloading WSUSSCN2.CAB file"
+    return $true
 }
 
-function script:Start-MBSAScanOnServer() {
+function script:Copy-WSUSFileToServer()
+{
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.String]
+        $Server
+    )
+    WriteLog "        Copying WSUSSCN2.CAB file to server $Server"
+    $wsusscn2File = Join-Path -Path $WSUSCabPath -ChildPath "wsusscn2.cab"
+
+    $null = Start-Job -ScriptBlock {
+        param
+        (
+            [Parameter(Mandatory = $true)]
+            [System.String]
+            $Server,
+
+            [Parameter(Mandatory = $true)]
+            [System.String]
+            $WSusScnPath
+        )
+        $session = New-PSSession -ComputerName $Server
+        #Copy-Item -Path $WSusScnPath -Destination "C:\Windows\Temp" -ToSession $session -Force
+        Remove-PSSession -Session $session
+    } -ArgumentList $Server, $wsusscn2File -Name WsusscnCopy
+}
+
+function script:Start-ScanOnServer()
+{
     Param (
-        [System.String] $server
+        [Parameter(Mandatory = $true)]
+        [System.String]
+        $Server
     )
-    $scriptpath = Split-Path $invocation.MyCommand.Path
 
-    $job = Start-Job -Scriptblock {
-        $scriptpath  = $args[0]
-        $server      = $args[1]
-        $MBSAPath    = $args[2]
-        $WSUSCabPath = $args[3]
-        $logfile     = $args[4]
+    $session = New-PSSession -ComputerName $Server
+    $scanJob = Invoke-Command -Session $session -ScriptBlock {
+        param ($excludedPatches)
 
-        function WriteLog() {
-            param
-            (
-                [parameter(Mandatory = $true)]
-                [System.String]
-                $message
-            )
-            $date = Get-Date -format "yyyy-MM-dd HH:mm:ss"
-            Write-Output -InputObject "$date - $message"
-            Add-Content -Path $logfile "$date - $message"
-        }
+        $wsusscnPath = 'C:\Windows\Temp\wsusscn2.cab'
 
-        Set-Location $scriptpath
+        $missingPatchesDetails = ""
+        $missingPatchesCount = 0
+        $errors = ""
+        $log = ""
 
-        $reportFolder = Join-Path -Path $env:TEMP -ChildPath "MBSAReports"
-        if (-not(Test-Path $reportFolder))
+        if (Test-Path -Path $wsusscnPath)
         {
-            New-Item -Path $reportFolder -ItemType Directory
-        }
-
-        $application  = Join-Path -Path $MBSAPath -ChildPath "mbsacli.exe"
-        $WSUSScn2Path = Join-Path -Path $WSUSCabPath -ChildPath "wsusscn2.cab"
-        $arguments    = "/target $server /n OS+SQL+IIS+Password /offline /q /catalog $WSUSScn2Path /rd $reportFolder"
-        Start-Process -FilePath $application -ArgumentList $arguments -PassThru -Wait
-    } -Name MBSA -ArgumentList $scriptpath, $server, $MBSAPath, $WSUSCabPath, $logfile
-}
-
-function script:Analyze-Results() {
-    Param
-    (
-        [System.String] $reportFolder
-    )
-    Write-Verbose "        Starting MBSA scan result analysis"
-    # Setup variables
-    $missingPatches = ""
-    $missingPatchesCount = 0
-    $failedServers = 0
-
-    # Retrieve all MBSA report filenames
-    $files = get-Childitem $reportFolder | Where-Object -FilterScript { $_.Extension -match "mbsa" }
-
-    # Loop through each MBSA report file
-    foreach ($file in $files)
-    {
-        # Read file into memory and parse the XML format
-        [XML]$scanresults = Get-Content $file.FullName
-        $missingKBs = ""
-
-        # Reset all patch counters
-        $critical = 0
-        $criticalkb = ""
-        $important = 0
-        $importantkb = ""
-        $moderate = 0
-        $moderatekb = ""
-        $low = 0
-        $lowkb = ""
-        $rollup = 0
-        $rollupkb = ""
-        $unknown = 0
-        $unknownkb = ""
-
-        $scanok = $false
-
-        # Loop through the different patch category sections
-        foreach ($check in $scanresults.SecScan.Check)
-        {
-            if ($check.Advice -ne "Cannot contact Windows Update Agent on target computer, possibly due to firewall settings.")
+            try
             {
-                $scanok = $true
-                # Loop through all patches in the specific category
-                foreach($update in $check.Detail.UpdateData)
+                $updateSession = New-Object -ComObject Microsoft.Update.Session
+                $updateServiceManager = New-Object -ComObject Microsoft.Update.ServiceManager
+                $UpdateService = $UpdateServiceManager.AddScanPackageService("Offline Sync Service", $wsusscnPath)
+                $UpdateSearcher = $UpdateSession.CreateUpdateSearcher()
+                $UpdateSearcher.ServerSelection = 3
+                $UpdateSearcher.ServiceID = $UpdateService.ServiceID
+                $SearchResult = $UpdateSearcher.Search('IsHidden = 0 AND IsInstalled =0')
+
+                $allMissingUpdates = $SearchResult.Updates | Where-Object { $_.KBArticleIds -notin @($excludedPatches.Patch) }
+                if ($allMissingUpdates.Count -ne 0)
                 {
-                    # Check if the patch is on the "Excluded Patches" list, if so skip patch
-                    if (($null -ne $excludedPatches) -and ($excludedPatches.Patch.Contains($update.KBID) -eq $false))
+                    $missingPatchesCount = 0
+                    $missingPatchesDetails += "`tServer: $($env:COMPUTERNAME)`r`n"
+
+                    $log += "          Server $($env:COMPUTERNAME) is missing the following patches:`r`n"
+                    foreach ($category in $SearchResult.RootCategories)
                     {
-                        # Only process the patches that are not installed
-                        if ($update.IsInstalled -eq $false)
+                        $catUpdates = $category.Updates | Where-Object { $_.KBArticleIds -notin @($excludedPatches.Patch) }
+                        if ($catUpdates.Count -gt 0)
                         {
-                            # Check what the severity is and process the data that way
-                            switch($update.Severity)
-                            {
-                                0 { # Severity is 0, patch is either Low or Rollup
-                                    if ($update.Type -eq "1")
-                                    {
-                                        # Patch severity is Low
-                                        $low++
-                                        $missingPatchesCount++
-                                        if ($lowkb -eq "") { $lowkb = $update.KBID } else { $lowkb += ", $($update.KBID)"}
-                                    }
-                                    elseif ($update.Type -eq "3")
-                                    {
-                                        # Patch type is Rollup
-                                        $rollup++
-                                        $missingPatchesCount++
-                                        if ($rollupkb -eq "") { $rollupkb = $update.KBID } else { $rollupkb += ", $($update.KBID)"}
-                                    }
-                                    else
-                                    {
-                                        # Patch type is Unknown
-                                        $unknown++
-                                        $missingPatchesCount++
-                                        if ($unknownkb -eq "") { $unknownkb = $update.KBID } else { $unknownkb += ", $($update.KBID)"}
-                                    }
-                                  }
-                                2 { 
-                                    # Patch severity is Moderate
-                                    $moderate++
-                                    $missingPatchesCount++
-                                    if ($moderatekb -eq "")
-                                    {
-                                        $moderatekb = $update.KBID
-                                    }
-                                    else
-                                    {
-                                        $moderatekb += ", $($update.KBID)"
-                                    }
-                                  }
-                                3 { 
-                                    # Patch severity is Important
-                                    $important++
-                                    $missingPatchesCount++
-                                    if ($importantkb -eq "")
-                                    {
-                                        $importantkb = $update.KBID
-                                    }
-                                    else
-                                    {
-                                        $importantkb += ", $($update.KBID)"
-                                    }
-                                  }
-                                4 { 
-                                    # Patch severity is Critical
-                                    $critical++
-                                    $missingPatchesCount++
-                                    if ($criticalkb -eq "")
-                                    {
-                                        $criticalkb = $update.KBID
-                                    }
-                                    else
-                                    {
-                                        $criticalkb += ", $($update.KBID)"
-                                    }
-                                  }
-                            }
+                            $catName = $category.Name
+                            $missingPatchesDetails += "`t`t$catName  : $($catUpdates.Count) ($(($catUpdates | ForEach { $_.KBArticleIDs | Select-Object -First 1 }) -join ", "))`r`n"
+
+                            $log += "`r`n          Category: $($category.Name)`r`n"
+                            $catUpdates | ForEach { $log += "          - $($_.Title)`r`n" }
+                            $missingPatchesCount += $catUpdates.Count
                         }
                     }
                 }
+                else
+                {
+                    $log += "          No patches missing!"
+                }
             }
-        }
-
-        if ($scanok)
-        {
-            # Output results to screen
-            $missingPatches += "`tServer: $($scanresults.SecScan.Machine)`r`n"
-            $missingPatches += "`t`tCritical  : $critical ($criticalkb)`r`n"
-            $missingPatches += "`t`tImportant : $important ($importantkb)`r`n"
-            $missingPatches += "`t`tModerate  : $moderate ($moderatekb)`r`n"
-            $missingPatches += "`t`tLow       : $low ($lowkb)`r`n"
-            $missingPatches += "`t`tRollup    : $rollup ($rollupkb)`r`n"
-            $missingPatches += "`t`tUnknown   : $unknown ($unknownkb)`r`n"
+            catch
+            {
+                $errors = "$($env:COMPUTERNAME): Error while performing scan: $($_.Exception)"
+            }
         }
         else
         {
-            $missingPatches += "`tServer: $($scanresults.SecScan.Machine)`r`n"
-            $missingPatches += "`t`tFailed: Scan could not be performed due to connectivity/firewall issues.`r`n"
-            $failedServers++
+            $errors = "$($env:COMPUTERNAME): Cannot find WSUSSCN2.CAB file on the server"
         }
-    }
-    Write-Verbose "        Completed MBSA scan result analysis"
-    return $missingPatches,$missingPatchesCount, $failedServers
+
+        return $missingPatchesDetails, $missingPatchesCount, $errors, $log
+    } -AsJob -HideComputerName -ArgumentList $excludedPatches
+
+    return $scanJob
 }
 
-function script:CheckM1_MBSACheck() {
-    Param
-    (
-        [parameter(Mandatory = $true)] [PSCustomObject] $check
-    )
-    WriteLog "      Starting MBSA check"
+function script:CheckM1_PatchCheck()
+{
+    Param()
+
+    WriteLog "      Starting Missing Patch check"
 
     if ($null -eq $results.Remote)
     {
-        $results.Remote = @{}
+        $results.Remote = @{ }
     }
-    
+
     $results.Remote.CheckM1 = ""
-    $errorCount   = 0
-    $errorMessage = ""
-    $reportFolder = Join-Path -Path $env:TEMP -ChildPath "MBSAReports"
 
-    if (-not (Test-Path -Path (Join-Path -Path $MBSAPath -ChildPath "mbsacli.exe")))
-    {
-        $results.Remote.CheckM1 = $results.Remote.CheckM1 + "MBSA Check: Failed, mbsacli.exe missing`r`n"
-        WriteLog "Error: MBSAcli.exe not found! (Path: $MBSAPath)"
-        return
-    }
-
+    # Download or use offline WSUSSCN2.CAB file
     if ($downloadWSUSFile -eq $true)
     {
-        Download-WSUSFile
-    }
-    else
-    {
-        if (-not (Test-Path -Path (Join-Path -Path $WSUSCabPath -ChildPath "wsusscn2.cab")))
+        # Download WSUSSCN2.CAB file
+        $downloadResult = Save-WSUSFile
+
+        if ($downloadResult -eq $false)
         {
-            $results.Remote.CheckM1 = $results.Remote.CheckM1 + "MBSA Check: Failed, wsusscn2.cab missing`r`n"
-            WriteLog "Error: Wsusscn2.cab not found! (Path: $WSUSCabPath)"
+            $results.Remote.CheckM1 = $results.Remote.CheckM1 + "Missing Patch Check: Failed, could not download WSUSSCN2.CAB file. Check logfile for more details.`r`n"
+            WriteLog "ERROR: Could not download WSUSSCN2.CAB file."
             return
         }
     }
-
-    foreach ($server in $config)
-    {
-        WriteLog "        Starting MBSA scan on server $($server.servername)"
-        Start-MBSAScanOnServer $server.servername
-    }
-    WriteLog "        Waiting for MBSA scans to complete"
-    $temp = Wait-Job -Name MBSA
-    WriteLog "        Completed all MBSA scans"
-
-    if (-not (Test-Path -Path (Join-Path -Path $reportFolder -ChildPath "*.mbsa")))
-    {
-        $results.Remote.CheckM1 = $results.Remote.CheckM1 + "MBSA Check: Failed, No reports were found in report folder`r`n"
-        WriteLog "Error: No reports found in report folder! (Path: $reportFolder)"
-        return
-    }
-    $analysisResults = Analyze-Results $reportFolder
-
-    WriteLog "        Cleaning up reports"
-    Remove-Job -Name MBSA
-    if ($debug -eq $true)
-    {
-        WriteLog "          NOTE: Debug is set to True: Leaving MBSA report files in $reportFolder"
-    }
     else
     {
-        Remove-Item $reportFolder -Force -Recurse
+        # Check if offline WSUSSCN2.CAB file exists
+        $wsusscn2Path = (Join-Path -Path $WSUSCabPath -ChildPath "wsusscn2.cab")
+        if (-not (Test-Path -Path $wsusscn2Path))
+        {
+            $results.Remote.CheckM1 = $results.Remote.CheckM1 + "Missing Patch Check: Failed, wsusscn2.cab missing.`r`n"
+            WriteLog "ERROR: Wsusscn2.cab not found! (Path: $WSUSCabPath)"
+            return
+        }
+        else
+        {
+            $wsusscn2Properties = Get-ItemProperty -Path $wsusscn2Path
+            if ($wsusscn2Properties.LastWriteTime -lt (Get-Date).AddDays(-60))
+            {
+                $results.Remote.CheckM1 = $results.Remote.CheckM1 + "Missing Patch Check: WARNING - Wsusscn2.cab file is older than 60 days`r`n"
+                WriteLog "WARNING: Wsusscn2.cab file is older than 60 days"
+            }
+        }
     }
 
-    $missingPatchesOverview = $analysisResults[0]
-    $missingPatchesCount    = $analysisResults[1]
-    $failedServers          = $analysisResults[2]
+    # Copying WSUSSCN2.CAB file to all servers
+    foreach ($server in $ServerConfig)
+    {
+        Copy-WSUSFileToServer -Server $server.servername
+    }
+    WriteLog "        Waiting for WSUSSCN2.CAB file copy to complete"
+    $null = Wait-Job -Name WsusscnCopy
+    Remove-Job -Name WsusscnCopy
 
+    WriteLog "        Excluding the following patches from the scan results: $($excludedPatches.Patch -join ", ")"
+
+    # Starting Missing Patch scan on all servers
+    $scanJobs = @()
+    foreach ($server in $ServerConfig)
+    {
+        WriteLog "        Starting Missing Patch scan on server $($server.servername)"
+        $scanJobs += Start-ScanOnServer $server.servername
+    }
+    WriteLog "        Waiting for Missing Patch scans to complete"
+    $null = Wait-Job -Job $scanJobs
+    WriteLog "        Completed all Missing Patch scans"
+
+    # Retrieving scan results from all servers
+    $missingPatchesCount = 0
+    $missingPatchesOverview = ""
+    $failedServers = 0
+    foreach ($job in $scanJobs)
+    {
+        $srvResult = Receive-Job -Job $job
+
+        if ($srvResult[0] -ne "")
+        {
+            $missingPatchesOverview += $srvResult[0]
+        }
+
+        $missingPatchesCount += $srvResult[1]
+
+        if ($srvResult[2] -ne "")
+        {
+            $failedServers++
+            $missingPatchesOverview += $srvResult[2]
+        }
+
+        WriteLog $srvResult[3]
+    }
+
+    WriteLog "        Cleaning up jobs and sessions"
+    Remove-Job -Job $scanJobs
+
+    # Store results in results object
     if ($missingPatchesCount -gt 0 -or $failedServers -gt 0)
     {
         WriteLog "        Check Failed"
-        $results.Remote.CheckM1 = $results.Remote.CheckM1 + "MBSA Check: Failed, $missingPatchesCount patches missing, $failedServers server(s) failed`r`n"
+        $results.Remote.CheckM1 = $results.Remote.CheckM1 + "Missing Patch Check: Failed, $missingPatchesCount patches missing, $failedServers server(s) failed`r`n"
         $results.Remote.CheckM1 = $results.Remote.CheckM1 + "$missingPatchesOverview"
     }
     else
     {
         WriteLog "        Check Passed"
-        $results.Remote.CheckM1 = $results.Remote.CheckM1 + "MBSA Check: Passed`r`n"
+        $results.Remote.CheckM1 = $results.Remote.CheckM1 + "Missing Patch Check: Passed`r`n"
     }
-    WriteLog "      Completed MBSA check"
+    WriteLog "      Completed Missing Patch check"
 }

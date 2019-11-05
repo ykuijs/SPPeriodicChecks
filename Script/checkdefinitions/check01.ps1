@@ -8,13 +8,14 @@ $item | Add-Member -type NoteProperty -Name 'Schedule' -Value 'Daily'
 
 $script:checks += $item
 
-function script:Check1_QuickEnvCheck() {
+function script:Check1_QuickEnvCheck()
+{
     WriteLog "    Starting Check 1: Quick Environment check"
-    if ($results.Remote -eq $null)
+    if ($null -eq $results.Remote)
     {
-        $results.Remote = @{}
+        $results.Remote = @{ }
     }
-    
+
     $results.Remote.Check1 = ""
     $errorCount = 0
     $errorURL = ""
@@ -27,18 +28,17 @@ function script:Check1_QuickEnvCheck() {
         try
         {
             #Actually making the request using the credentials and other properties
-            $request = [System.Net.WebRequest]::Create($url.URL) 
+            $request = [System.Net.WebRequest]::Create($url.URL)
             $request.Credentials = $credential
             $request.UserAgent = "Mozilla/5.0 (compatible; MSIE 11.0; Windows NT; Windows NT 6.1; en-US"
-            $request.Headers.Add("X-FORMS_BASED_AUTH_ACCEPTED", "f")    
-            $request.Method = "GET" 
+            $request.Headers.Add("X-FORMS_BASED_AUTH_ACCEPTED", "f")
+            $request.Method = "GET"
             $request.Accept = "text/html, application/xhtml+xml, */*"
 
             $response = $request.GetResponse()
             $stream = New-Object System.IO.StreamReader($response.GetResponseStream())
-            $html = $stream.ReadToEnd()
+            $null = $stream.ReadToEnd()
 
-            #$result = Invoke-WebRequest -Uri $url.URL -UseDefaultCredentials
             if ($response.Headers -contains "SharePointError")
             {
                 #SharePointError header found, check NOT OK
@@ -52,13 +52,10 @@ function script:Check1_QuickEnvCheck() {
         }
         catch
         {
-            [System.Net.HttpWebResponse] $resp = [System.Net.HttpWebResponse] $_.Exception.Response  
-            Write-Host $response.StatusCode -ForegroundColor Red 
-
             #Error occurred during retrieving URL, check NOT OK
             if ($errorURL -ne "")
             {
-               $errorURL += ", "
+                $errorURL += ", "
             }
             $errorURL += "$($url.URL) (HTTP Error: $($response.StatusCode))"
             $errorCount++
@@ -69,7 +66,11 @@ function script:Check1_QuickEnvCheck() {
             {
                 $stream.Dispose()
             }
-            $response.Dispose()
+
+            if ($null -ne $response)
+            {
+                $response.Dispose()
+            }
         }
     }
 
