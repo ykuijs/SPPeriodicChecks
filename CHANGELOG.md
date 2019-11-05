@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.16
 
 * Published script on GitHub
 * Fixed bug with reading config file, introduced in v1.15
