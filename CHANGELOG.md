@@ -3,7 +3,7 @@
 ## Unreleased
 
 * Published script on GitHub
-* Fixed bug with reading config file, introduces in v1.15
+* Fixed bug with reading config file, introduced in v1.15
 * Removed the dependency on MBSA for the Missing Patch scan
 * Increased PowerShell version requirement to v5.0 (due to use of Copy-Item -ToSession)
 
