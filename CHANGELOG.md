@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.17 [Unreleased]
+
+* Added check 19: Check if content databases aren't larger than 175GB
+* Updated documentation to reflect all recent changes
+* Updated reporting template to include new checks
+
 ## v1.16
 
 * Published script on GitHub
