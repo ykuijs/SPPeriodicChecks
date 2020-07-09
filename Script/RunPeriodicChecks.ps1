@@ -45,8 +45,8 @@
 .NOTES
     File Name     : RunPeriodicChecks.ps1
     Author        : Yorick Kuijs
-    Version       : 1.0.16
-	Last Modified : 5-11-2019
+    Version       : 1.0.17
+	Last Modified : 2020-07-09
 .EXITCODES
     0 : No errors encountered
     10: Cannot find config.xml file
