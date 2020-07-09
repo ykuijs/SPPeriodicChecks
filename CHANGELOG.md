@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.17 [Unreleased]
+## v1.17
 
 * Added check 19: Check if content databases aren't larger than 175GB
 * Added check 22: Check if all site collections have a quota template applied and if so, if the
