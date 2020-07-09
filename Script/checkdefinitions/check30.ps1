@@ -10,13 +10,13 @@ $script:checks += $item
 
 function script:Check30_LastBootTime()
 {
-    $sb = [Scriptblock]::Create( {
-            WriteLog "Starting Check 30: Last Boot Time check"
-            $lastBootTime = (Get-CIMInstance -Class win32_operatingsystem).LastBootUpTime
-            $results.Check30 = "Last Boot Time: $lastBootTime"
+    $sb = {
+        Write-Log "Starting Check 30: Last Boot Time check"
+        $lastBootTime = (Get-CIMInstance -Class win32_operatingsystem).LastBootUpTime
+        $results.Check30 = "Last Boot Time: $lastBootTime"
 
-            WriteLog "Completed Check 30: Last Boot Time check"
-        })
+        Write-Log "Completed Check 30: Last Boot Time check"
+    }
 
     return $sb.ToString()
 }

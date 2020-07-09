@@ -1,6 +1,6 @@
 ﻿$item = New-Object PSObject
 $item | Add-Member -type NoteProperty -Name 'ID' -Value '16'
-$item | Add-Member -type NoteProperty -Name 'Check' -Value 'ContentDBSize'
+$item | Add-Member -type NoteProperty -Name 'Check' -Value 'ContentDBSizeInSiteCol'
 $item | Add-Member -type NoteProperty -Name 'Description' -Value 'Content Database size'
 $item | Add-Member -type NoteProperty -Name 'Target' -Value 'Farm'
 $item | Add-Member -type NoteProperty -Name 'Type' -Value 'Local'
@@ -8,18 +8,23 @@ $item | Add-Member -type NoteProperty -Name 'Schedule' -Value 'Daily'
 
 $script:checks += $item
 
-function script:Check16_ContentDBSize()
+function script:Check16_ContentDBSizeInSiteCol()
 {
-    $sb = [Scriptblock]::Create( {
-            WriteLog "Starting Check 16: Content Database Size check"
-            $results.Check16 = ""
+    $excludedcontentdbs = Read-Configuration (Join-Path -Path $configPath -ChildPath 'contentdbexclusions.txt')
 
-            $siteThreshold = 100
+    $sbTemplate = {
+        Write-Log "Starting Check 16: Content Database Size check"
+        $results.Check16 = ""
 
-            $errorCount = 0
-            $errorDB = ""
+        $siteThreshold = 100
+        $excludedCDBs = @("<REPLACE_EXCL_CDB>")
 
-            foreach ($cdb in Get-SPContentDatabase)
+        $errorCount = 0
+        $errorDB = ""
+
+        foreach ($cdb in Get-SPContentDatabase)
+        {
+            if ($cdb.Name -notmatch ($excludedCDBs -join "|"))
             {
                 $cdbSize = $cdb.MaximumSiteCount - $cdb.CurrentSiteCount
                 if (($cdbSize -lt $siteThreshold) -and ($cdbSize -ne 0))
@@ -32,21 +37,24 @@ function script:Check16_ContentDBSize()
                     $errorDB += "$($cdb.Name) (Free: $cdbSize)"
                 }
             }
+        }
 
-            if ($errorCount -gt 0)
-            {
-                WriteLog "  Check Failed"
-                $results.Check16 = $results.Check16 + "Database Size Check: $errorCount database(s) failed`r`n"
-                $results.Check16 = $results.Check16 + "`tDatabases: $errorDB`r`n"
-            }
-            else
-            {
-                WriteLog "  Check Passed"
-                $results.Check16 = $results.Check16 + "Database Size Check: Passed`r`n"
-            }
+        if ($errorCount -gt 0)
+        {
+            Write-Log "  Check Failed"
+            $results.Check16 = $results.Check16 + "Database Size Check: $errorCount database(s) failed`r`n"
+            $results.Check16 = $results.Check16 + "`tDatabases: $errorDB`r`n"
+        }
+        else
+        {
+            Write-Log "  Check Passed"
+            $results.Check16 = $results.Check16 + "Database Size Check: Passed`r`n"
+        }
 
-            WriteLog "Completed Check 16: Content Database Size check"
-        })
+        Write-Log "Completed Check 16: Content Database Size check"
+    }
+
+    $sb = $sbTemplate -replace "<REPLACE_EXCL_CDB>", ($excludedcontentdbs.ContentDB -join '", "')
 
     return $sb.ToString()
 }

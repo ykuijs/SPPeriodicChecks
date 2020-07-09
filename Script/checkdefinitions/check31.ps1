@@ -11,31 +11,36 @@ $script:checks += $item
 
 function script:Check31_ServicesCheck()
 {
-    $sb = [Scriptblock]::Create( {
-            WriteLog "Starting Check 31: Services check"
+    $excludedservices = Read-Configuration (Join-Path -Path $configPath -ChildPath 'servicesexclusions.txt')
 
-            $errorServices = ""
+    $sbTemplate = {
+        Write-Log "Starting Check 31: Services check"
 
-            $configFolder = "c:\Windows\Monitoring"
-            $configFilename = "servicesconfig.txt"
+        $errorServices = ""
 
-            if (-not (Test-Path $configFolder))
-            {
-                $null = New-Item -Path $configFolder -ItemType Directory
-            }
+        $excludedServices = @("<REPLACE_EXCL_SVC>")
+        $configFolder = "c:\Windows\Monitoring"
+        $configFilename = "servicesconfig.txt"
 
-            $configFile = Join-Path -Path $configFolder -ChildPath $configFilename
-            if (-not (Test-Path $configFile))
-            {
-                $services = Get-Service
-                $services | Select-Object Name, Status | ConvertTo-Csv | Out-File $configFile
-            }
+        if (-not (Test-Path -Path $configFolder))
+        {
+            $null = New-Item -Path $configFolder -ItemType Directory
+        }
 
-            $configServices = Get-Content $configFile | ConvertFrom-Csv
+        $configFile = Join-Path -Path $configFolder -ChildPath $configFilename
+        if (-not (Test-Path $configFile))
+        {
+            $services = Get-Service
+            $services | Select-Object -Property Name, Status | ConvertTo-Csv | Out-File -FilePath $configFile
+        }
 
-            $runningServices = Get-Service | Select-Object Name, Status
+        $configServices = Get-Content -Path $configFile | ConvertFrom-Csv
 
-            foreach ($configService in $configServices)
+        $runningServices = Get-Service | Select-Object -Property Name, Status
+
+        foreach ($configService in $configServices)
+        {
+            if ($configService.Name -notin $excludedServices)
             {
                 if ($configService.Status -eq "Running")
                 {
@@ -56,21 +61,24 @@ function script:Check31_ServicesCheck()
                     }
                 }
             }
+        }
 
-            if ($errorServices -ne "")
-            {
-                WriteLog "  Check Failed"
-                $results.Check31 = $results.Check31 + "Services Check: Failed`r`n"
-                $results.Check31 = $results.Check31 + $errorServices
-            }
-            else
-            {
-                WriteLog "  Check Passed"
-                $results.Check31 = $results.Check31 + "Services Check: Passed`r`n"
-            }
+        if ($errorServices -ne "")
+        {
+            Write-Log "  Check Failed"
+            $results.Check31 = $results.Check31 + "Services Check: Failed`r`n"
+            $results.Check31 = $results.Check31 + $errorServices
+        }
+        else
+        {
+            Write-Log "  Check Passed"
+            $results.Check31 = $results.Check31 + "Services Check: Passed`r`n"
+        }
 
-            WriteLog "Completed Check 31: Services check"
-        })
+        Write-Log "Completed Check 31: Services check"
+    }
+
+    $sb = $sbTemplate -replace "<REPLACE_EXCL_SVC>", ($excludedservices.Service -join '", "')
 
     return $sb.ToString()
 }

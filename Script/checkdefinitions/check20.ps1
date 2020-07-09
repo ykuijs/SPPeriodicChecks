@@ -10,10 +10,12 @@ $script:checks += $item
 
 function script:Check20_SearchTopologyStatus()
 {
-    $sb = [Scriptblock]::Create( {
-            WriteLog "Starting Check 20: Search Topology check"
-            $results.Check20 = ""
+    $sb = {
+        Write-Log "Starting Check 20: Search Topology check"
+        $results.Check20 = ""
 
+        try
+        {
             $ssas = Get-SPEnterpriseSearchServiceApplication
             $errorMessage = ""
             foreach ($ssa in $ssas)
@@ -21,7 +23,7 @@ function script:Check20_SearchTopologyStatus()
                 $errorCount = 0
                 $erroredComponents = ""
 
-                $components = Get-SPEnterpriseSearchStatus -SearchApplication $ssa
+                $components = Get-SPEnterpriseSearchStatus -SearchApplication $ssa -ErrorAction Stop
                 foreach ($component in $components)
                 {
                     if ($component.State -ne "Active")
@@ -43,18 +45,25 @@ function script:Check20_SearchTopologyStatus()
 
             if ($errorMessage -ne "")
             {
-                WriteLog "  Check Failed"
+                Write-Log "  Check Failed"
                 $results.Check20 = $results.Check20 + "Search Topology Check: Failed`r`n"
                 $results.Check20 = $results.Check20 + $errorMessage
             }
             else
             {
-                WriteLog "  Check Passed"
+                Write-Log "  Check Passed"
                 $results.Check20 = $results.Check20 + "Search Topology Check: Passed`r`n"
             }
+        }
+        catch
+        {
+            Write-Log "  Check Failed"
+            $results.Check20 = $results.Check20 + "Search Topology Check: Failed`r`n"
+            $results.Check20 = $results.Check20 + $_.Exception.Message
+        }
 
-            WriteLog "Completed Check 20: Search Topology check"
-        })
+        Write-Log "Completed Check 20: Search Topology check"
+    }
 
     return $sb.ToString()
 }

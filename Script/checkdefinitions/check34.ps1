@@ -10,7 +10,7 @@ $script:checks += $item
 
 function script:Check34_GroupCheck()
 {
-    WriteLog "    Starting Check 34: Group check"
+    Write-Log "    Starting Check 34: Group check"
     if ($null -eq $results.Remote)
     {
         $results.Remote = @{ }
@@ -47,7 +47,7 @@ function script:Check34_GroupCheck()
         return $result
     }
 
-    WriteLog "      Reading groups configuration file"
+    Write-Log "      Reading groups configuration file"
     $ConfigFile = Join-Path -Path $scriptpath -ChildPath "config\groups.txt"
     $config = Import-Csv -Path $ConfigFile
     $uniquegroups = $config.groupname | Sort-Object | Get-Unique
@@ -65,7 +65,7 @@ function script:Check34_GroupCheck()
 
     foreach ($groupname in $uniquegroups)
     {
-        WriteLog "      Processing group: $groupname"
+        Write-Log "      Processing group: $groupname"
         $group = Get-ADGroup $groupname
         $actualMembers = @()
         $desiredMembers = @()
@@ -125,14 +125,14 @@ function script:Check34_GroupCheck()
 
     if ($errorCount -gt 0)
     {
-        WriteLog "      Check Failed"
+        Write-Log "      Check Failed"
         $results.Remote.Check34 = $results.Remote.Check34 + "Group Check: $errorCount group(s) failed`r`n"
         $results.Remote.Check34 = $results.Remote.Check34 + "`tGroups: $errorGroup`r`n"
     }
     else
     {
-        WriteLog "      Check Passed"
+        Write-Log "      Check Passed"
         $results.Remote.Check34 = $results.Remote.Check34 + "Group Check: Passed`r`n"
     }
-    WriteLog "    Completed Check 34: Group check"
+    Write-Log "    Completed Check 34: Group check"
 }

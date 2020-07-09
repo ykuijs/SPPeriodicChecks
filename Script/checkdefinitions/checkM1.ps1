@@ -10,14 +10,14 @@ $script:checks += $item
 
 function script:Save-WSUSFile()
 {
-    WriteLog "        Started downloading WSUSSCN2.CAB file"
+    Write-Log "        Started downloading WSUSSCN2.CAB file"
     $url = "http://go.microsoft.com/fwlink/?LinkID=74689"
     $destination = Join-Path -Path $WSUSCabPath -ChildPath "wsusscn2.cab"
 
     $wsusscn2Properties = Get-ItemProperty -Path $destination
     if ($wsusscn2Properties.LastWriteTime -lt (Get-Date).AddDays(-7))
     {
-        WriteLog "           Downloading file to $destination"
+        Write-Log "           Downloading file to $destination"
         if (Test-Path -Path $destination)
         {
             Remove-Item -Path $destination -ErrorAction SilentlyContinue
@@ -28,17 +28,17 @@ function script:Save-WSUSFile()
         {
             $wc = New-Object System.Net.WebClient
             $wc.DownloadFile($url, $destination)
-            WriteLog "        Completed downloading WSUSSCN2.CAB file"
+            Write-Log "        Completed downloading WSUSSCN2.CAB file"
         }
         catch
         {
-            WriteLog " [ERROR] Error while downloading WSUSSCN2.CAB file: $($_.Exception)"
+            Write-Log " [ERROR] Error while downloading WSUSSCN2.CAB file: $($_.Exception)"
             return $false
         }
     }
     else
     {
-        WriteLog "          Already downloaded a copy of WSUSSCN2.CAB in the last seven days. Skipping download!"
+        Write-Log "          Already downloaded a copy of WSUSSCN2.CAB in the last seven days. Skipping download!"
     }
 
     return $true
@@ -52,7 +52,7 @@ function script:Copy-WSUSFileToServer()
         [System.String]
         $Server
     )
-    WriteLog "        Copying WSUSSCN2.CAB file to server $Server"
+    Write-Log "        Copying WSUSSCN2.CAB file to server $Server"
     $wsusscn2File = Join-Path -Path $WSUSCabPath -ChildPath "wsusscn2.cab"
 
     $null = Start-Job -ScriptBlock {
@@ -74,7 +74,7 @@ function script:Copy-WSUSFileToServer()
 
 function script:Start-ScanOnServer()
 {
-    Param (
+    param (
         [Parameter(Mandatory = $true)]
         [System.String]
         $Server
@@ -147,9 +147,11 @@ function script:Start-ScanOnServer()
 
 function script:CheckM1_PatchCheck()
 {
-    Param()
+    param ()
 
-    WriteLog "      Starting Missing Patch check"
+    Write-Log "      Starting Missing Patch check"
+
+    $excludedpatches = Read-Configuration (Join-Path -Path $configPath -ChildPath 'patchexclusions.txt')
 
     if ($null -eq $results.Remote)
     {
@@ -167,7 +169,7 @@ function script:CheckM1_PatchCheck()
         if ($downloadResult -eq $false)
         {
             $results.Remote.CheckM1 = $results.Remote.CheckM1 + "Missing Patch Check: Failed, could not download WSUSSCN2.CAB file. Check logfile for more details.`r`n"
-            WriteLog "ERROR: Could not download WSUSSCN2.CAB file."
+            Write-Log "ERROR: Could not download WSUSSCN2.CAB file."
             return
         }
     }
@@ -178,7 +180,7 @@ function script:CheckM1_PatchCheck()
         if (-not (Test-Path -Path $wsusscn2Path))
         {
             $results.Remote.CheckM1 = $results.Remote.CheckM1 + "Missing Patch Check: Failed, wsusscn2.cab missing.`r`n"
-            WriteLog "ERROR: Wsusscn2.cab not found! (Path: $WSUSCabPath)"
+            Write-Log "ERROR: Wsusscn2.cab not found! (Path: $WSUSCabPath)"
             return
         }
         else
@@ -187,7 +189,7 @@ function script:CheckM1_PatchCheck()
             if ($wsusscn2Properties.LastWriteTime -lt (Get-Date).AddDays(-60))
             {
                 $results.Remote.CheckM1 = $results.Remote.CheckM1 + "Missing Patch Check: WARNING - Wsusscn2.cab file is older than 60 days`r`n"
-                WriteLog "WARNING: Wsusscn2.cab file is older than 60 days"
+                Write-Log "WARNING: Wsusscn2.cab file is older than 60 days"
             }
         }
     }
@@ -197,22 +199,23 @@ function script:CheckM1_PatchCheck()
     {
         Copy-WSUSFileToServer -Server $server.servername
     }
-    WriteLog "        Waiting for WSUSSCN2.CAB file copy to complete"
+
+    Write-Log "        Waiting for WSUSSCN2.CAB file copy to complete"
     $null = Wait-Job -Name WsusscnCopy
     Remove-Job -Name WsusscnCopy
 
-    WriteLog "        Excluding the following patches from the scan results: $($excludedPatches.Patch -join ", ")"
+    Write-Log "        Excluding the following patches from the scan results: $($excludedPatches.Patch -join ", ")"
 
     # Starting Missing Patch scan on all servers
     $scanJobs = @()
     foreach ($server in $ServerConfig)
     {
-        WriteLog "        Starting Missing Patch scan on server $($server.servername)"
+        Write-Log "        Starting Missing Patch scan on server $($server.servername)"
         $scanJobs += Start-ScanOnServer $server.servername
     }
-    WriteLog "        Waiting for Missing Patch scans to complete"
+    Write-Log "        Waiting for Missing Patch scans to complete"
     $null = Wait-Job -Job $scanJobs
-    WriteLog "        Completed all Missing Patch scans"
+    Write-Log "        Completed all Missing Patch scans"
 
     # Retrieving scan results from all servers
     $missingPatchesCount = 0
@@ -235,23 +238,23 @@ function script:CheckM1_PatchCheck()
             $missingPatchesOverview += $srvResult[2]
         }
 
-        WriteLog $srvResult[3]
+        Write-Log $srvResult[3]
     }
 
-    WriteLog "        Cleaning up jobs and sessions"
+    Write-Log "        Cleaning up jobs and sessions"
     Remove-Job -Job $scanJobs
 
     # Store results in results object
     if ($missingPatchesCount -gt 0 -or $failedServers -gt 0)
     {
-        WriteLog "        Check Failed"
+        Write-Log "        Check Failed"
         $results.Remote.CheckM1 = $results.Remote.CheckM1 + "Missing Patch Check: Failed, $missingPatchesCount patches missing, $failedServers server(s) failed`r`n"
         $results.Remote.CheckM1 = $results.Remote.CheckM1 + "$missingPatchesOverview"
     }
     else
     {
-        WriteLog "        Check Passed"
+        Write-Log "        Check Passed"
         $results.Remote.CheckM1 = $results.Remote.CheckM1 + "Missing Patch Check: Passed`r`n"
     }
-    WriteLog "      Completed Missing Patch check"
+    Write-Log "      Completed Missing Patch check"
 }
