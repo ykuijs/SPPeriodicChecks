@@ -10,55 +10,65 @@ $script:checks += $item
 
 function script:Check21_GathererLogs()
 {
-    $sb = [Scriptblock]::Create( {
-            WriteLog "Starting Check 21: Search Gatherer Log check"
-            $results.Check21 = ""
-            $logMaxRows = 10000
-            $contentSourceID = -1 # All content sources
-            $errorID = -1 # All errors
-            $endDate = Get-Date
-            $startDate = $endDate.AddDays(-3)
+    $sb = {
+        Write-Log "Starting Check 21: Search Gatherer Log check"
+        $results.Check21 = ""
+        $logMaxRows = 10000
+        $contentSourceID = -1 # All content sources
+        $errorID = -1 # All errors
+        $endDate = Get-Date
+        $startDate = $endDate.AddDays(-3)
 
-            $ssas = Get-SPEnterpriseSearchServiceApplication
+        $warningsThresholdPercentage = 15
+        $errorsThresholdPercentage = 8
+        $topErrorsThreshold = 0
 
-            if ($null -eq $ssas)
+        $ssas = Get-SPEnterpriseSearchServiceApplication
+
+        if ($null -eq $ssas)
+        {
+            # No Search Service Applications found
+            Write-Log "  Check not possible: No Search Service applications found. Either because none exist or an access issue occurred."
+            $results.Check21 = $results.Check21 + "Search Gatherer Check: No Search Service applications found.`r`n"
+            $results.Check21 = $results.Check21 + "`tEither because none exist or an access issue occurred.`r`n"
+        }
+        else
+        {
+            # One or more Search Service Applications found
+            foreach ($ssa in $ssas)
             {
-                # No Search Service Applications found
-                WriteLog "  Check not possible: No Search Service applications found. Either because none exist or an access issue occurred."
-                $results.Check21 = $results.Check21 + "Search Gatherer Check: No Search Service applications found.`r`n"
-                $results.Check21 = $results.Check21 + "`tEither because none exist or an access issue occurred.`r`n"
-            }
-            else
-            {
-                # One or more Search Service Applications found
-                foreach ($ssa in $ssas)
+                $logs = New-Object Microsoft.Office.Server.Search.Administration.CrawlLog $ssa
+
+                # Allowed statuses: https://docs.microsoft.com/en-us/previous-versions/office/sharepoint-server/jj264492(v%3Doffice.15)
+                $successes = ($logs.GetCrawledUrls($true, $logMaxRows, "", $false, $contentSourceID, 0, $errorID, $startDate, $endDate)).DocumentCount
+                $warnings = ($logs.GetCrawledUrls($true, $logMaxRows, "", $false, $contentSourceID, 1, $errorID, $startDate, $endDate)).DocumentCount
+                $errors = ($logs.GetCrawledUrls($true, $logMaxRows, "", $false, $contentSourceID, 2, $errorID, $startDate, $endDate)).DocumentCount
+                $topErrors = ($logs.GetCrawledUrls($true, $logMaxRows, "", $false, $contentSourceID, 4, $errorID, $startDate, $endDate)).DocumentCount
+
+                $warningsThreshold = [math]::Round(($successes * $warningsThresholdPercentage) / 100)
+                $errorsThreshold = [math]::Round(($successes * $errorsThresholdPercentage) / 100)
+
+                if (($warnings -gt $warningsThreshold) -or `
+                    ($errors -gt $errorsThreshold) -or `
+                    ($topErrors -gt $topErrorsThreshold))
                 {
-                    $logs = New-Object Microsoft.Office.Server.Search.Administration.CrawlLog $ssa
-
-                    $warnings = $logs.GetCrawledUrls($true, $logMaxRows, "", $false, $contentSourceID, 1, $errorID, $startDate, $endDate)
-                    $errors = $logs.GetCrawledUrls($true, $logMaxRows, "", $false, $contentSourceID, 2, $errorID, $startDate, $endDate)
-                    $topErrors = $logs.GetCrawledUrls($true, $logMaxRows, "", $false, $contentSourceID, 4, $errorID, $startDate, $endDate)
-
-                    if (($errors.Rows[0]["DocumentCount"] -gt 0) -or `
-                        ($topErrors.Rows[0]["DocumentCount"] -gt 0) -or `
-                        ($warnings.Rows[0]["DocumentCount"]))
-                    {
-                        WriteLog "  Check Failed"
-                        $results.Check21 = $results.Check21 + "Search Gatherer Check: $($ssa.name) - Failed`r`n"
-                        $results.Check21 = $results.Check21 + "`tWarnings: $($warnings.Rows[0]["DocumentCount"])`r`n"
-                        $results.Check21 = $results.Check21 + "`tErrors: $($errors.Rows[0]["DocumentCount"])`r`n"
-                        $results.Check21 = $results.Check21 + "`tTop Level Errors: $($topErrors.Rows[0]["DocumentCount"])`r`n"
-                    }
-                    else
-                    {
-                        WriteLog "  Check Passed"
-                        $results.Check21 = $results.Check21 + "Search Gatherer Check: $($ssa.name) - Passed`r`n"
-                    }
+                    Write-Log "  Check Failed"
+                    $results.Check21 = $results.Check21 + "Search Gatherer Check: $($ssa.name) - Failed`r`n"
+                    $results.Check21 = $results.Check21 + "`tSuccesses: $($successes)`r`n"
+                    $results.Check21 = $results.Check21 + "`tWarnings: $($warnings)`r`n"
+                    $results.Check21 = $results.Check21 + "`tErrors: $($errors)`r`n"
+                    $results.Check21 = $results.Check21 + "`tTop Level Errors: $($topErrors)`r`n"
+                }
+                else
+                {
+                    Write-Log "  Check Passed"
+                    $results.Check21 = $results.Check21 + "Search Gatherer Check: $($ssa.name) - Passed`r`n"
                 }
             }
+        }
 
-            WriteLog "Completed Check 21: Search Gatherer Log check"
-        })
+        Write-Log "Completed Check 21: Search Gatherer Log check"
+    }
 
     return $sb.ToString()
 }

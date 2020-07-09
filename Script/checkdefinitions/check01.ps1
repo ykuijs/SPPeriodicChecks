@@ -10,7 +10,10 @@ $script:checks += $item
 
 function script:Check1_QuickEnvCheck()
 {
-    WriteLog "    Starting Check 1: Quick Environment check"
+    Write-Log "    Starting Check 1: Quick Environment check"
+
+    $urls = Read-Configuration (Join-Path -Path $configPath -ChildPath 'urls.txt')
+
     if ($null -eq $results.Remote)
     {
         $results.Remote = @{ }
@@ -24,7 +27,7 @@ function script:Check1_QuickEnvCheck()
 
     foreach ($url in $urls)
     {
-        WriteLog "      Processing url `"$($url.URL)`""
+        Write-Log "      Processing url `"$($url.URL)`""
         try
         {
             #Actually making the request using the credentials and other properties
@@ -42,10 +45,6 @@ function script:Check1_QuickEnvCheck()
             if ($response.Headers -contains "SharePointError")
             {
                 #SharePointError header found, check NOT OK
-                if ($errorURL -ne "")
-                {
-                    $errorURL += ", "
-                }
                 $errorURL += "$($url.URL) (Errorpage was returned)"
                 $errorCount++
             }
@@ -53,11 +52,7 @@ function script:Check1_QuickEnvCheck()
         catch
         {
             #Error occurred during retrieving URL, check NOT OK
-            if ($errorURL -ne "")
-            {
-                $errorURL += ", "
-            }
-            $errorURL += "$($url.URL) (HTTP Error: $($response.StatusCode))"
+            $errorURL += "$($url.URL) (HTTP Error: $($response.StatusCode))`r`n"
             $errorCount++
         }
         finally
@@ -77,11 +72,11 @@ function script:Check1_QuickEnvCheck()
     if ($errorCount -gt 0)
     {
         $results.Remote.Check1 = $results.Remote.Check1 + "URL Check: $errorCount url(s) failed`r`n"
-        $results.Remote.Check1 = $results.Remote.Check1 + "`tURL's: $errorURL`r`n"
+        $results.Remote.Check1 = $results.Remote.Check1 + "`t$errorURL"
     }
     else
     {
         $results.Remote.Check1 = $results.Remote.Check1 + "URL Check: Passed`r`n"
     }
-    WriteLog "    Completed Check 1: Quick Environment check"
+    Write-Log "    Completed Check 1: Quick Environment check"
 }

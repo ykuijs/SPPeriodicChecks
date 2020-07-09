@@ -10,91 +10,91 @@ $script:checks += $item
 
 function script:CheckW4_AccessCheck()
 {
-    $sb = [Scriptblock]::Create( {
-            WriteLog "Starting Check W4: Access check"
-            $results.CheckW4 = ""
+    $sb = {
+        Write-Log "Starting Check W4: Access check"
+        $results.CheckW4 = ""
 
-            Function Get-DisplayName ($strUserName)
+        Function Get-DisplayName ($strUserName)
+        {
+            $searcher = New-Object System.DirectoryServices.DirectorySearcher([ADSI]'')
+            $searcher.Filter = "(&(objectClass=User)(samAccountName=$strUserName))"
+            $result = $searcher.FindOne()
+
+            if ($null -eq $result)
             {
-                $searcher = New-Object System.DirectoryServices.DirectorySearcher([ADSI]'')
-                $searcher.Filter = "(&(objectClass=User)(samAccountName=$strUserName))"
-                $result = $searcher.FindOne()
-
-                if ($null -eq $result)
-                {
-                    return $null
-                }
-                else
-                {
-                    return $result.GetDirectoryEntry().displayName
-                }
+                return $null
             }
+            else
+            {
+                return $result.GetDirectoryEntry().displayName
+            }
+        }
 
-            # Filter:
-            #   Event ID's: 4624 and 4625
-            #   Time frame: One week back
-            #   LogonTypes: 2, 7, 9, 10 and 11
-            #     http://www.windowsecurity.com/articles-tutorials/misc_network_security/Logon-Types.html
+        # Filter:
+        #   Event ID's: 4624 and 4625
+        #   Time frame: One week back
+        #   LogonTypes: 2, 7, 9, 10 and 11
+        #     http://www.windowsecurity.com/articles-tutorials/misc_network_security/Logon-Types.html
 
-            [xml]$FilterXML = @"
+        [xml]$FilterXML = @"
 <QueryList>
-  <Query Id="0" Path="Security">
-    <Select Path="Security">*[System[(EventID=4624 or EventID=4625) and TimeCreated[timediff(@SystemTime) &lt;= 604800000]]] and *[EventData[(Data[@Name='LogonType'] = '2') or (Data[@Name='LogonType'] = '7') or (Data[@Name='LogonType'] = '9') or (Data[@Name='LogonType'] = '10') or (Data[@Name='LogonType'] = '11')]]</Select>
-  </Query>
+<Query Id="0" Path="Security">
+<Select Path="Security">*[System[(EventID=4624 or EventID=4625) and TimeCreated[timediff(@SystemTime) &lt;= 604800000]]] and *[EventData[(Data[@Name='LogonType'] = '2') or (Data[@Name='LogonType'] = '7') or (Data[@Name='LogonType'] = '9') or (Data[@Name='LogonType'] = '10') or (Data[@Name='LogonType'] = '11')]]</Select>
+</Query>
 </QueryList>
 "@
 
-            $log = Get-WinEvent -FilterXml $FilterXML -ErrorAction SilentlyContinue
+        $log = Get-WinEvent -FilterXml $FilterXML -ErrorAction SilentlyContinue
 
-            $loggedOnUsers = @()
-            foreach ($logItem in $log)
+        $loggedOnUsers = @()
+        foreach ($logItem in $log)
+        {
+            switch ($logItem.Id)
             {
-                switch ($logItem.Id)
+                4624
                 {
-                    4624
-                    {
-                        #$logonType = $logItem.Properties[8].Value
-                        $user = $logItem.Properties[5].Value
-                    }
-                    4625
-                    {
-                        #$logonType = $logItem.Properties[10].Value
-                        $user = $logItem.Properties[5].Value
-                    }
+                    #$logonType = $logItem.Properties[8].Value
+                    $user = $logItem.Properties[5].Value
                 }
-
-                if (-not $loggedOnUsers.Contains($user))
+                4625
                 {
-                    $loggedOnUsers += $user
+                    #$logonType = $logItem.Properties[10].Value
+                    $user = $logItem.Properties[5].Value
                 }
             }
 
-            # Sort array alphabetically
-            [Array]::Sort([array]$loggedOnUsers)
-
-            # Process array and generate output
-            $users = ""
-            foreach ($loggedOnUser in $loggedOnUsers)
+            if (-not $loggedOnUsers.Contains($user))
             {
-                $displayName = Get-DisplayName $loggedOnUser
-                if ($null -eq $displayName)
-                {
-                    $displayName = $loggedOnUser
-                }
+                $loggedOnUsers += $user
+            }
+        }
 
-                if ($users -eq "")
-                {
-                    $users += "$displayName ($loggedOnUser)"
-                }
-                else
-                {
-                    $users += ", $displayName ($loggedOnUser)"
-                }
+        # Sort array alphabetically
+        [Array]::Sort([array]$loggedOnUsers)
+
+        # Process array and generate output
+        $users = ""
+        foreach ($loggedOnUser in $loggedOnUsers)
+        {
+            $displayName = Get-DisplayName $loggedOnUser
+            if ($null -eq $displayName)
+            {
+                $displayName = $loggedOnUser
             }
 
-            $results.CheckW4 = "Logged on users:`r`n" + $users
-            WriteLog "Completed Check W4: Access check"
-        })
+            if ($users -eq "")
+            {
+                $users += "$displayName ($loggedOnUser)"
+            }
+            else
+            {
+                $users += ", $displayName ($loggedOnUser)"
+            }
+        }
+
+        $results.CheckW4 = "Logged on users:`r`n" + $users
+        Write-Log "Completed Check W4: Access check"
+    }
 
     return $sb.ToString()
 }

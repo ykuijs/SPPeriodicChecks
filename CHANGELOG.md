@@ -3,8 +3,25 @@
 ## v1.17 [Unreleased]
 
 * Added check 19: Check if content databases aren't larger than 175GB
+* Added check 22: Check if all site collections have a quota template applied and if so, if the
+  site uses more than 90% of the quota
+* Added error handling to Search Topology check (check 21), where errors are handled nicely when
+  the admin component is not reachable
+* Added hardcoded path for loading Distributed Cache module. In case the PSModulePath has been
+  updated (check 18)
+* Added possibility to exclude Content Databases from Content Database checks (check 16 and 19)
+* Added possibility to exclude Services from Running Services check (check 31)
+* Added possibility to check Cloud Application Model (CAM, SharePoint App) servers as well. Added
+  new "CAM" role to servers.txt and "serverscam" to check Target parameter
+* Moved loading config files to their respective checks (check 1, 16, 19 and M1), so they are only
+  loaded (and checking for presence) if the check is actually performed
+* Updated Search Gatherer Log check (check 21) to only fail when errors are more than 8% of
+  the number of successes
+* Updated Baseline check (check W3) to check DSC compliance (if used)
 * Updated documentation to reflect all recent changes
 * Updated reporting template to include new checks
+* Updated report generation: When both Email and Disk are specified, a summary with just the failed
+  checks is send via mail and the full report is saved to disk.
 
 ## v1.16
 

@@ -1,6 +1,6 @@
 ﻿$item = New-Object PSObject
 $item | Add-Member -type NoteProperty -Name 'ID' -Value '19'
-$item | Add-Member -type NoteProperty -Name 'Check' -Value 'ContentDatabaseSize'
+$item | Add-Member -type NoteProperty -Name 'Check' -Value 'ContentDBSizeInGB'
 $item | Add-Member -type NoteProperty -Name 'Description' -Value 'Content Database File Size'
 $item | Add-Member -type NoteProperty -Name 'Target' -Value 'Farm'
 $item | Add-Member -type NoteProperty -Name 'Type' -Value 'Local'
@@ -8,54 +8,57 @@ $item | Add-Member -type NoteProperty -Name 'Schedule' -Value 'Daily'
 
 $script:checks += $item
 
-function script:Check19_ContentDatabaseSize()
+function script:Check19_ContentDBSizeInGB()
 {
-    $sb = [Scriptblock]::Create( {
-            WriteLog "Starting Check 19: Content Database Size Check"
-            $results.Check19 = ""
+    $excludedcontentdbs = Read-Configuration (Join-Path -Path $configPath -ChildPath 'contentdbexclusions.txt')
 
-            $maxSize = 175
-            $errorCount = 0
-            $errorDB = ""
-            
-            function Invoke-SQL
-            {
-                param
-                (
-                    [Parameter(Mandatory = $true)]
-                    [System.String]
-                    $SQLInstance,
+    $sbTemplate = {
+        Write-Log "Starting Check 19: Content Database Size Check"
+        $results.Check19 = ""
 
-                    [Parameter(Mandatory = $true)]
-                    [System.String]
-                    $Database,
+        $maxSize = 175
+        $excludedCDBs = @("<REPLACE_EXCL_CDB>")
 
-                    [Parameter(Mandatory = $true)]
-                    [System.String]
-                    $Query
-                  )
+        $errorCount = 0
+        $errorDB = ""
 
-                $connectionString = "Data Source=$SQLInstance; " +
-                                    "Integrated Security=SSPI; " +
-                                    "Initial Catalog=$Database"
+        function Invoke-SQL
+        {
+            param
+            (
+                [Parameter(Mandatory = $true)]
+                [System.String]
+                $SQLInstance,
 
-                $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
-                $command = New-Object System.Data.SqlClient.SqlCommand($Query,$connection)
-                $connection.Open()
+                [Parameter(Mandatory = $true)]
+                [System.String]
+                $Database,
 
-                $adapter = New-Object System.Data.SqlClient.SqlDataAdapter $command
-                $dataset = New-Object System.Data.DataSet
+                [Parameter(Mandatory = $true)]
+                [System.String]
+                $Query
+            )
 
-                $adapter.Fill($dataSet) | Out-Null
+            $connectionString = "Data Source=$SQLInstance; " + `
+                "Integrated Security=SSPI; " + `
+                "Initial Catalog=$Database"
 
-                $connection.Close()
-                $dataSet.Tables
+            $connection = New-Object System.Data.SqlClient.SqlConnection($connectionString)
+            $command = New-Object System.Data.SqlClient.SqlCommand($Query, $connection)
+            $connection.Open()
 
-            }
+            $adapter = New-Object System.Data.SqlClient.SqlDataAdapter $command
+            $dataset = New-Object System.Data.DataSet
 
-            $cdbs = Get-SPContentDatabase
+            $adapter.Fill($dataSet) | Out-Null
 
-            foreach ($cdb in $cdbs)
+            $connection.Close()
+            return $dataSet.Tables
+        }
+
+        foreach ($cdb in Get-SPContentDatabase)
+        {
+            if ($cdb.Name -notmatch ($excludedCDBs -join "|"))
             {
                 $query = "SELECT SUM(CAST(FILEPROPERTY(name, 'SpaceUsed') AS INT)/128.0) AS SpaceUsedMB FROM sys.database_files WHERE type=0"
                 $spaceUsed = (Invoke-SQL -SQLInstance $cdb.Server -Database $cdb.Name -Query $query).SpaceUsedMB
@@ -69,21 +72,24 @@ function script:Check19_ContentDatabaseSize()
                     $errorDB += "$($cdb.Name) ($([Math]::Round($spaceUsed/1024,1))GB)"
                 }
             }
+        }
 
-            if ($errorCount -gt 0)
-            {
-                WriteLog "  Check Failed"
-                $results.Check19 = $results.Check19 + "Content Database Size Check: Check failed. $errorCount errors found.`r`n"
-                $results.Check19 = $results.Check19 + "`tFailed databases: $errorDB`r`n"
-            }
-            else
-            {
-                WriteLog "  Check Passed"
-                $results.Check19 = $results.Check19 + "Content Database Size Check: Passed`r`n"
-            }
+        if ($errorCount -gt 0)
+        {
+            Write-Log "  Check Failed"
+            $results.Check19 = $results.Check19 + "Content Database Size Check: Check failed. $errorCount errors found.`r`n"
+            $results.Check19 = $results.Check19 + "`tFailed databases: $errorDB`r`n"
+        }
+        else
+        {
+            Write-Log "  Check Passed"
+            $results.Check19 = $results.Check19 + "Content Database Size Check: Passed`r`n"
+        }
 
-            WriteLog "Completed Check 19: Content Database Size check"
-        })
+        Write-Log "Completed Check 19: Content Database Size check"
+    }
+
+    $sb = $sbTemplate -replace "<REPLACE_EXCL_CDB>", ($excludedcontentdbs.ContentDB -join '", "')
 
     return $sb.ToString()
 }

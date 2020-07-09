@@ -36,8 +36,12 @@
     .\config\urls.txt
     Configuration file with all urls which need to be checked
 .REQUIRED_FILE
-    .\config\excludedpatches.txt
-    Configuration file with all patches that have to be excluded from the Missing Patch reporting
+    .\config\patchexclusions.txt
+    Configuration file with all patches that have to be excluded from the Missing Patch reporting (M1)
+.REQUIRED_FILE
+    .\config\contentdbexclusions.txt
+    Configuration file with all content databases that have to be excluded from the Content
+    Database Size check (D16)
 .NOTES
     File Name     : RunPeriodicChecks.ps1
     Author        : Yorick Kuijs
@@ -69,7 +73,7 @@ param(
     $Config = "config.xml"
 )
 
-function WriteLog()
+function Write-Log()
 {
     # Logging function - Write logging to screen and log file
     param
@@ -135,7 +139,7 @@ function Test-ValidConfiguration
         $ServerConfig
     )
 
-    WriteLog "  Validating server configuration"
+    Write-Log "  Validating server configuration"
 
     $grouped = $ServerConfig | Sort-Object -Property Farm | Group-Object -Property Farm
 
@@ -146,7 +150,7 @@ function Test-ValidConfiguration
         $caservers = $group.Group | Where-Object -FilterScript { $_.centraladmin -eq "yes" }
         if ($null -eq $caservers)
         {
-            WriteLog "**** [ERROR] No central admin specified for farm $($group.Name)"
+            Write-Log "**** [ERROR] No central admin specified for farm $($group.Name)"
             exit 30
         }
 
@@ -154,7 +158,7 @@ function Test-ValidConfiguration
         $incorrectcaservers = $caservers | Where-Object -FilterScript { $_.role -ne "SP" }
         if ($null -ne $incorrectcaservers)
         {
-            WriteLog "**** [ERROR] Central admin role was specified on a non-SharePoint server for farm $($group.Name)"
+            Write-Log "**** [ERROR] Central admin role was specified on a non-SharePoint server for farm $($group.Name)"
             exit 30
         }
 
@@ -162,12 +166,12 @@ function Test-ValidConfiguration
         $spservers = $group.Group | Where-Object -FilterScript { $_.role -eq "SP" }
         if ($null -eq $spservers)
         {
-            WriteLog "**** [ERROR] No SharePoint servers specified for farm $($group.Name)"
+            Write-Log "**** [ERROR] No SharePoint servers specified for farm $($group.Name)"
             exit 30
         }
-        WriteLog "    Correct server configuration for farm $($group.Name)"
+        Write-Log "    Correct server configuration for farm $($group.Name)"
     }
-    WriteLog "  Completed validating server configuration"
+    Write-Log "  Completed validating server configuration"
 }
 
 function Confirm-EmailAddress
@@ -180,7 +184,7 @@ function Confirm-EmailAddress
         $EmailAddress
     )
 
-    WriteLog "    Validating email address $EmailAddress"
+    Write-Log "    Validating email address $EmailAddress"
 
     try
     {
@@ -189,12 +193,12 @@ function Confirm-EmailAddress
     }
     catch
     {
-        WriteLog "      [ERROR] Email address $EmailAddress is invalid. Skipping address."
+        Write-Log "      [ERROR] Email address $EmailAddress is invalid. Skipping address."
         return $false
     }
 }
 
-function ReadConfiguration()
+function Read-Configuration()
 {
     # Read configuration function - Read the configuration from a CSV input file and store it in the specified variable
     param
@@ -204,12 +208,12 @@ function ReadConfiguration()
         $ConfigFile
     )
 
-    WriteLog "  Reading $ConfigFile"
+    Write-Log "  Reading $ConfigFile"
     if (Test-Path -Path $ConfigFile)
     {
         $content = Import-Csv -Path $ConfigFile
         #Set-Variable -Name $VarName -Value $content -Scope Script
-        WriteLog "  Completed reading $ConfigFile"
+        Write-Log "  Completed reading $ConfigFile"
         return $content
     }
     else
@@ -219,22 +223,22 @@ function ReadConfiguration()
     }
 }
 
-function ReadCheckFiles()
+function Read-CheckFiles()
 {
     # Read Check file function - Read and import all Check Definition files from the checkdefinitions folder.
     param ()
 
-    WriteLog "  Reading check definitions"
+    Write-Log "  Reading check definitions"
     $checkdefinitionsFolder = Join-Path -Path $scriptpath -ChildPath "checkdefinitions\*.ps1"
     foreach ($definition in Get-Item -Path $checkdefinitionsFolder)
     {
-        WriteLog "    Reading check definition: $($definition.Name)"
+        Write-Log "    Reading check definition: $($definition.Name)"
         . $definition
     }
-    WriteLog "  Completed reading check definitions"
+    Write-Log "  Completed reading check definitions"
 }
 
-function InitializeScriptVariable()
+function Initialize-ScriptVariable()
 {
     # Variable initialization function - Initialize the scripts variables with the loading of the required SharePoint plugin
     param
@@ -244,22 +248,22 @@ function InitializeScriptVariable()
         $servers
     )
 
-    WriteLog "  Initialize Scripts"
+    Write-Log "  Initialize Scripts"
     foreach ($server in $servers)
     {
-        $scripts.($server.servername) = "`$logpath = `"$remoteLogPath`"`r`nif (-not(Test-Path `$logpath)) { `$null = New-Item `$logpath -type directory }`r`n`r`n`$date = Get-Date -Format `"yyyyMMdd`"`r`n`$logfile = Join-Path `$logpath `"PeriodicChecks-`$(`$env:COMPUTERNAME)-`$date.log`"`r`n`r`nfunction WriteLog() {`r`n`tparam`r`n`t(`r`n`t`t[parameter(Mandatory = `$true)] [System.String] `$message`r`n`t)`r`n`t`$date = Get-Date -format `"yyyy-MM-dd HH:mm:ss`"`r`n`tAdd-Content -Path `$logfile `"`$date - `$message`"`r`n}`r`n`r`n`$results=@{}`r`n`$starttime = (Get-Date)`r`n`r`n"
+        $scripts.($server.servername) = "`$logpath = `"$remoteLogPath`"`r`nif (-not(Test-Path `$logpath)) { `$null = New-Item `$logpath -type directory }`r`n`r`n`$date = Get-Date -Format `"yyyyMMdd`"`r`n`$logfile = Join-Path `$logpath `"PeriodicChecks-`$(`$env:COMPUTERNAME)-`$date.log`"`r`n`r`nfunction Write-Log() {`r`n`tparam`r`n`t(`r`n`t`t[parameter(Mandatory = `$true)] [System.String] `$message`r`n`t)`r`n`t`$date = Get-Date -format `"yyyy-MM-dd HH:mm:ss`"`r`n`tAdd-Content -Path `$logfile `"`$date - `$message`"`r`n}`r`n`r`n`$results=@{}`r`n`$starttime = (Get-Date)`r`n`r`n"
         if ($server.role -eq "SP")
         {
             $scripts.($server.servername) = $scripts.($server.servername) + `
                 "if (`$null -eq (Get-PSSnapin -Name Microsoft.SharePoint.PowerShell -ErrorAction SilentlyContinue)) {`r`n`tif (`$null -ne (Get-PSSnapin -Registered -Name Microsoft.SharePoint.PowerShell -ErrorAction SilentlyContinue))`r`n`t{`r`n`t`tAdd-PSSnapin Microsoft.SharePoint.PowerShell -ErrorAction SilentlyContinue`r`n`t}`r`n`telse`r`n`t{`r`n`t`treturn `"[ERROR] ERROR LOADING POWERSHELL PLUGIN`"`r`n`t}`r`n}`r`n`r`n" + `
-                "`$farm = Get-SPFarm -ErrorAction SilentlyContinue`r`nif (`$null -eq `$farm) {`r`n`tWriteLog `"[ERROR] Error connecting to farm. Check if you have the correct permissions`"`r`n`treturn `"[ERROR] ERROR CONNECTING TO FARM`"`r`n}`r`n`r`n"
+                "`$farm = Get-SPFarm -ErrorAction SilentlyContinue`r`nif (`$null -eq `$farm) {`r`n`tWrite-Log `"[ERROR] Error connecting to farm. Check if you have the correct permissions`"`r`n`treturn `"[ERROR] ERROR CONNECTING TO FARM`"`r`n}`r`n`r`n"
         }
         $checkServer.($server.servername) = $false
     }
-    WriteLog "  Completed Initialize Scripts"
+    Write-Log "  Completed Initialize Scripts"
 }
 
-function FinalizeScriptVariable()
+function Complete-ScriptVariable()
 {
     # Finalize the script variables function - Finalize the scripts variable to make sure it returns the gathered information
     param
@@ -269,17 +273,17 @@ function FinalizeScriptVariable()
         $servers
     )
 
-    WriteLog "  Finalize Scripts"
+    Write-Log "  Finalize Scripts"
     foreach ($server in $servers)
     {
         $scripts.($server.servername) = $scripts.($server.servername) + "`r`nreturn `$results`r`n"
     }
-    WriteLog "  Completed Finalize Scripts"
+    Write-Log "  Completed Finalize Scripts"
 }
 
-function GenerateFunctionName()
+function Get-FunctionName()
 {
-    # Check function name generation function - Generate the check function names, to they can be executed by the AddCheckscriptForServer function
+    # Check function name generation function - Generate the check function names, to they can be executed by the Add-CheckscriptForServer function
     param
     (
         [parameter(Mandatory = $true)]
@@ -290,7 +294,7 @@ function GenerateFunctionName()
     return "Check$($check.ID)_$($check.Check)"
 }
 
-function AddCheckscriptForServer()
+function Add-CheckscriptForServer()
 {
     # Add check script for a specific server function - Add the check script to the scripts variable for the specified server
     param
@@ -304,30 +308,30 @@ function AddCheckscriptForServer()
         $server
     )
 
-    WriteLog "        Start AddCheckscriptForServer"
+    Write-Log "        Start Add-CheckscriptForServer"
 
-    WriteLog "          Check is $($check.Check)"
-    $functionName = GenerateFunctionName $check
+    Write-Log "          Check is $($check.Check)"
+    $functionName = Get-FunctionName $check
     $checkscript = & $functionName
 
     $scripts.$server = $scripts.$server + $checkscript.ToString()
     $checkServer.$server = $true
 
-    WriteLog "        Completed AddCheckscriptForServer"
+    Write-Log "        Completed Add-CheckscriptForServer"
 }
 
-function GenerateScripts()
+function New-ScriptsCollection()
 {
     # Generate check scripts function - Generate the check scripts for a specific check
     param (
         [System.Array]
         $localChecks
     )
-    WriteLog "  Start generating check scripts for all local checks"
+    Write-Log "  Start generating check scripts for all local checks"
 
     foreach ($check in $localChecks)
     {
-        WriteLog "    Generating check scripts for $($check.ID) - $($check.Description)"
+        Write-Log "    Generating check scripts for $($check.ID) - $($check.Description)"
         switch ($check.Target.ToLower())
         {
             "farm"
@@ -338,14 +342,14 @@ function GenerateScripts()
                 # Loop through each farm
                 foreach ($farm in $farms)
                 {
-                    WriteLog "    Processing farm `"$farm`""
+                    Write-Log "    Processing farm `"$farm`""
                     # Find the Central Admin server in the specific farm
                     $servers = $ServerConfig | Where-Object -FilterScript { $_.farm -eq $farm } `
                     | Where-Object -FilterScript { $_.centraladmin -eq "yes" } `
                     | Select-Object -First 1
                     $caserver = $servers.servername
 
-                    AddCheckscriptForServer $check $caserver
+                    Add-CheckscriptForServer $check $caserver
                 }
             }
 
@@ -357,8 +361,8 @@ function GenerateScripts()
                 # Loop through each server
                 foreach ($server in $servers)
                 {
-                    WriteLog "      Processing server `"$($server.servername)`""
-                    AddCheckscriptForServer $check $server.servername
+                    Write-Log "      Processing server `"$($server.servername)`""
+                    Add-CheckscriptForServer $check $server.servername
                 }
             }
 
@@ -370,8 +374,21 @@ function GenerateScripts()
                 # Loop through each server
                 foreach ($server in $servers)
                 {
-                    WriteLog "      Processing server `"$($server.servername)`""
-                    AddCheckscriptForServer $check $server.servername
+                    Write-Log "      Processing server `"$($server.servername)`""
+                    Add-CheckscriptForServer $check $server.servername
+                }
+            }
+
+            "serverscam"
+            {
+                # Get all CAM servers
+                $servers = $ServerConfig | Where-Object -FilterScript { $_.role -eq "CAM" }
+
+                # Loop through each server
+                foreach ($server in $servers)
+                {
+                    Write-Log "      Processing server `"$($server.servername)`""
+                    Add-CheckscriptForServer $check $server.servername
                 }
             }
 
@@ -380,8 +397,8 @@ function GenerateScripts()
                 # Loop through each server
                 foreach ($server in $ServerConfig)
                 {
-                    WriteLog "      Processing server `"$($server.servername)`""
-                    AddCheckscriptForServer $check $server.servername
+                    Write-Log "      Processing server `"$($server.servername)`""
+                    Add-CheckscriptForServer $check $server.servername
                 }
             }
 
@@ -390,30 +407,30 @@ function GenerateScripts()
                 # Loop through each URL
                 foreach ($url in $urls)
                 {
-                    WriteLog "      Processing url `"$($url.URL)`""
+                    Write-Log "      Processing url `"$($url.URL)`""
                     #Remote Check, so do nothing
                 }
             }
         }
-        WriteLog "    Completed generating scripts"
-        WriteLog " "
+        Write-Log "    Completed generating scripts"
+        Write-Log " "
     }
-    WriteLog "  Completed generating check scripts for all local checks"
+    Write-Log "  Completed generating check scripts for all local checks"
 }
 
-function RunScripts()
+function Invoke-ScriptsCollection()
 {
     # Run check scripts function - Run all check scripts on all servers as a job
     param (
         [System.Management.Automation.PSCredential]
-        $credential
+        $Credential
     )
 
-    WriteLog "  Start running the scripts on the servers"
+    Write-Log "  Start running the scripts on the servers"
     $jobs = @()
     foreach ($server in $scripts.Keys)
     {
-        WriteLog "    Running script on server $server"
+        Write-Log "    Running script on server $server"
 
         $scriptblock = [ScriptBlock]::Create($scripts.$server)
         if ($checkServer.$server)
@@ -426,7 +443,7 @@ function RunScripts()
             }
             catch
             {
-                WriteLog "[ERROR] An error occurred while creating the remote session: $($_.Exception.Message)"
+                Write-Log "[ERROR] An error occurred while creating the remote session: $($_.Exception.Message)"
 
                 $script:erroredServersCount++
                 if ($script:erroredServers -eq "")
@@ -457,7 +474,7 @@ function RunScripts()
         }
     }
 
-    WriteLog "    Waiting for scripts to finish"
+    Write-Log "    Waiting for scripts to finish"
     if ($jobs.Length -gt 0)
     {
         $sleep = 30
@@ -486,7 +503,7 @@ function RunScripts()
                 $results.$server = Receive-Job -Job $job
                 if ($results.$server -is [System.String] -and $results.$server -like "*[ERROR]*")
                 {
-                    WriteLog "      [ERROR] Error while executing script. Error message: $($results.$server)"
+                    Write-Log "      [ERROR] Error while executing script. Error message: $($results.$server)"
                     $script:erroredServersCount++
                     if ($script:erroredServers -eq "")
                     {
@@ -500,7 +517,7 @@ function RunScripts()
             }
             "Running"
             {
-                WriteLog "      [ERROR] Time-out occurred during check of server $server - Job state is Running"
+                Write-Log "      [ERROR] Time-out occurred during check of server $server - Job state is Running"
 
                 $script:erroredServersCount++
                 if ($script:erroredServers -eq "")
@@ -514,9 +531,9 @@ function RunScripts()
             }
             "Failed"
             {
-                WriteLog "      [ERROR] Error occurred during check of server $server - Job state is Failed"
+                Write-Log "      [ERROR] Error occurred during check of server $server - Job state is Failed"
                 $jobresult = $job.ChildJobs[0].JobStateInfo.Reason.ErrorRecord
-                WriteLog "        Error message: $jobresult"
+                Write-Log "        Error message: $jobresult"
 
                 $script:erroredServersCount++
                 if ($script:erroredServers -eq "")
@@ -530,7 +547,7 @@ function RunScripts()
             }
             Default
             {
-                WriteLog "      [ERROR] Error occurred during check of server $server - Job state is $jobState"
+                Write-Log "      [ERROR] Error occurred during check of server $server - Job state is $jobState"
 
                 $script:erroredServersCount++
                 if ($script:erroredServers -eq "")
@@ -546,12 +563,12 @@ function RunScripts()
 
         if ($null -eq $job.PSEndTime)
         {
-            WriteLog "    Completed running script on server $server (Duration: Still running...)"
+            Write-Log "    Completed running script on server $server (Duration: Still running...)"
         }
         else
         {
             $jobDuration = "{0:N0}" -f ($job.PSEndTime - $job.PSBeginTime).TotalSeconds
-            WriteLog "    Completed running script on server $server (Duration: $jobDuration seconds)"
+            Write-Log "    Completed running script on server $server (Duration: $jobDuration seconds)"
         }
 
         $null = Remove-Job -Job $job
@@ -564,27 +581,27 @@ function RunScripts()
     }
     catch
     {
-        WriteLog "    [ERROR] Error while cleaning up remote sessions"
+        Write-Log "    [ERROR] Error while cleaning up remote sessions"
     }
 
-    WriteLog "  Completed running the scripts on the servers"
-    WriteLog " "
+    Write-Log "  Completed running the scripts on the servers"
+    Write-Log " "
 }
 
-function RunRemoteChecks()
+function Invoke-RemoteChecks()
 {
     # Run all remote checks function - Run all remote checks on all servers / environments
     param (
         [System.Array]
-        $remoteChecks
+        $RemoteChecks
     )
-    WriteLog "  Start executing remote checks"
+    Write-Log "  Start executing remote checks"
 
     foreach ($check in $remoteChecks)
     {
-        WriteLog "    Executing remote check $($check.ID) - $($check.Description)"
+        Write-Log "    Executing remote check $($check.ID) - $($check.Description)"
 
-        $functionName = GenerateFunctionName $check
+        $functionName = Get-FunctionName $check
 
         switch ($check.Target.ToLower())
         {
@@ -596,7 +613,7 @@ function RunRemoteChecks()
                 # Loop through each farm
                 foreach ($farm in $farms)
                 {
-                    WriteLog "    Processing farm `"$farm`""
+                    Write-Log "    Processing farm `"$farm`""
                     # Find the Central Admin server in the specific farm
                     $servers = $ServerConfig | Where-Object -FilterScript { $_.farm -eq $farm } `
                     | Where-Object -FilterScript { $_.centraladmin -eq "yes" }
@@ -616,7 +633,7 @@ function RunRemoteChecks()
                 # Loop through each server
                 foreach ($server in $servers)
                 {
-                    WriteLog "      Processing server `"$($server.servername)`""
+                    Write-Log "      Processing server `"$($server.servername)`""
                 }
             }
 
@@ -630,7 +647,21 @@ function RunRemoteChecks()
                 # Loop through each server
                 foreach ($server in $servers)
                 {
-                    WriteLog "      Processing server `"$($server.servername)`""
+                    Write-Log "      Processing server `"$($server.servername)`""
+                }
+            }
+
+            "serverscam"
+            {
+                # Get all SQL servers
+                $servers = $ServerConfig | Where-Object -FilterScript { $_.role -eq "CAM" }
+
+                & $functionName $servers
+
+                # Loop through each server
+                foreach ($server in $servers)
+                {
+                    Write-Log "      Processing server `"$($server.servername)`""
                 }
             }
 
@@ -646,52 +677,56 @@ function RunRemoteChecks()
                 & $functionName
             }
         }
-        WriteLog "    Completed remote check"
-        WriteLog " "
+        Write-Log "    Completed remote check"
+        Write-Log " "
     }
-    WriteLog "  Completed executing remote checks"
+    Write-Log "  Completed executing remote checks"
 }
 
-function AnalyzeResults()
+function Test-ResultsReport()
 {
     # Analyze results function - Analyze the results from all checks and generate the report.
     param (
         [System.Array]
-        $runChecks
+        $RunChecks
     )
 
     $date = Get-Date -Format "yyyy-MM-dd"
-    WriteLog "  Start data analysis"
-    $analysis = "<html>`r`n<head>`r`n  <title>Periodic Check Report - $date</title>`r`n"
-    $analysis += "<style>table, th, td { border: 1px solid black; border-collapse: collapse; } th, td { padding: 10px; } th { background-color: #f1f1c1; } .failed {background-color: red;}</style>"
-    $analysis += "</head>`r`n<body>`r`n"
+    Write-Log "  Start data analysis"
+    $fullReport = "<html>`r`n<head>`r`n  <title>Periodic Check Report - $date</title>`r`n"
+    $fullReport += "<style>table { border: 1px solid black; border-collapse: collapse; } th, td { padding: 10px; } th { background-color: #00A4EF; color: white } .failed {background-color: red;}</style>"
+    $fullReport += "</head>`r`n<body>`r`n"
 
-    $analysis += "<h2>Periodic Check Report - $date</h2>`r`n"
-    $analysis += "<h3>Summary</h3>`r`n"
-    $analysis += "<table>`r`n<tr><td>Start time</td><td>$start</td></tr>`r`n"
-    $analysis += "<tr><td>End time</td><td>$(Get-Date)</td></tr>`r`n</table>`r`n"
-    $analysis += "</ br>`r`n"
+    $fullReport += "<h2>Periodic Check Report - $date</h2>`r`n"
+    $fullReport += "<h3>Summary</h3>`r`n"
+    $fullReport += "<table>`r`n<tr><td>Start time</td><td>$start</td></tr>`r`n"
+    $fullReport += "<tr><td>End time</td><td>$(Get-Date)</td></tr>`r`n</table>`r`n"
+    $fullReport += "<br />`r`n"
 
     if ($script:erroredServersCount -gt 0)
     {
-        $analysis += "<h3>Scan errors</h3>`r`n"
-        $analysis += "<table>`r`n<tr><td>Error count</td><td>$script:erroredServersCount</td></tr>`r`n"
-        $analysis += "<tr><td>Server names</td><td>$script:erroredServers</td></tr>`r`n</table>`r`n"
-        $analysis += "</ br>`r`n"
+        $fullReport += "<h3>Scan errors</h3>`r`n"
+        $fullReport += "<table>`r`n<tr><td>Error count</td><td>$script:erroredServersCount</td></tr>`r`n"
+        $fullReport += "<tr><td>Server names</td><td>$script:erroredServers</td></tr>`r`n</table>`r`n"
+        $fullReport += "<br />`r`n"
     }
     else
     {
-        $analysis += "<h3>Scan errors</h3>`r`n"
-        $analysis += "No errors detected while running the script</ br>`r`n"
-        $analysis += "</ br>`r`n"
+        $fullReport += "<h3>Scan errors</h3>`r`n"
+        $fullReport += "No errors detected while running the script<br />`r`n"
+        $fullReport += "<br />`r`n"
     }
+
+    $successfullChecks = ""
+    $failedChecks = ""
 
     foreach ($id in $runChecks.Id)
     {
-        #Write-Output "ID: $id"
+        $erroredCheck = $false
+
         $check = $checks | Where-Object -FilterScript { $_.Id -eq $id }
-        $analysis += "<h2>Check $id - $($check.Description) - $($check.Schedule)</h2>`r`n"
-        $analysis += "<table>`r`n<tr><th>Server</th><th>Result</th></tr>`r`n"
+        $checkResult = "<h3>Check $id - $($check.Description) - $($check.Schedule)</h3>`r`n"
+        $checkResult += "<table>`r`n<tr><th>Server</th><th>Result</th></tr>`r`n"
 
         foreach ($server in $results.Keys)
         {
@@ -712,116 +747,151 @@ function AnalyzeResults()
 
                 if ($result.ToLower() -like "* failed*")
                 {
-                    $analysis += "<tr><td>$($source)</td><td class=failed>$result</td></tr>`r`n"
+                    $checkResult += "<tr><td>$($source)</td><td class=failed>$result</td></tr>`r`n"
+                    $erroredCheck = $true
                 }
                 else
                 {
-                    $analysis += "<tr><td>$($source)</td><td>$result</td></tr>`r`n"
+                    $checkResult += "<tr><td>$($source)</td><td>$result</td></tr>`r`n"
                 }
             }
         }
-        $analysis += "</table>`r`n`r`n"
-    }
-    $analysis += "</body>`r`n</html>`r`n"
+        $checkResult += "</table>`r`n`r`n"
 
-    Set-Variable -Name "report" -Value $analysis -Scope Script
-    WriteLog "  Completed data analysis"
+        if ($erroredCheck)
+        {
+            $failedChecks += $checkResult
+        }
+        else
+        {
+            $successfullChecks += $checkResult
+        }
+    }
+
+    $fullReport += "<br />`r`n<hr />`r`n"
+    $fullReport += "<h2><u>Failed Checks</u></h2>`r`n"
+
+    if ($failedChecks -eq "")
+    {
+        $fullReport += "No failed checks!`r`n"
+    }
+    else
+    {
+        $fullReport += $failedChecks
+    }
+
+    $summaryReport = $fullReport
+
+    $fullReport += "<br />`r`n<hr />`r`n"
+    $fullReport += "<h2><u>Successful Checks</u></h2>`r`n"
+
+    if ($successfullChecks -eq "")
+    {
+        $fullReport += "No successful checks!`r`n"
+    }
+    else
+    {
+        $fullReport += $successfullChecks
+    }
+
+    $fullReport += "</body>`r`n</html>`r`n"
+    $summaryReport += "</body>`r`n</html>`r`n"
+
+    Write-Log "  Completed data analysis"
+    return $fullReport, $summaryReport
 }
 
-function ProcessReport()
+function Start-ReportCreation()
 {
     # Process report information function
     # - Send the generated report via e-mail to a specified e-mail address
     # - Store the generated report to disk
     param (
-        [System.String]
-        $report
+        [System.String[]]
+        $Reports
     )
-    WriteLog "  Processing report"
+    Write-Log "  Processing report"
 
     $date = Get-Date -Format "yyyy-MM-dd"
     if ($reportsViaEmail -eq $true)
     {
-        WriteLog "    Sending report via e-mail. Debug = $debug"
+        Write-Log "    Sending report via e-mail"
         try
         {
-            if ($debug -eq $true)
-            {
-                $debugreportfile = Join-Path -Path $scriptpath -ChildPath "report.htm"
-                if (Test-Path -Path $debugreportfile)
-                {
-                    Remove-Item -Path $debugreportfile
-                }
+            $params = @{
+                To         = $mailto
+                From       = $mailfrom
+                Subject    = "Periodic Checks Report $date"
+                SmtpServer = $smtpserver
+            }
 
-                Add-Content -Path $debugreportfile -Value $report
-                WriteLog "      Report stored to $debugreportfile"
+            if ($reportsToDisk -eq $true)
+            {
+                # ReportsViaEmail and ReportToDisk are specified. Sending Summary Report
+                Write-Log "      Both Email and Disk are specified. Sending summary report via email."
+                $params.Body = $Reports[1]
             }
             else
             {
-                $params = @{
-                    To         = $mailto
-                    From       = $mailfrom
-                    Subject    = "Periodic Checks Report $date"
-                    SmtpServer = $smtpserver
-                    Body       = $report
-                }
-
-                if ($mailcc.Count -gt 0)
-                {
-                    $params.Add("CC", $mailcc)
-                }
-
-                if ($mailbcc.Count -gt 0)
-                {
-                    $params.Add("BCC", $mailbcc)
-                }
-                Send-MailMessage @params -BodyAsHtml -ErrorAction Stop
-
-                $recipients = $mailto
-                if ($mailcc.Count -gt 0)
-                {
-                    $recipients += $mailcc
-                }
-
-                if ($mailbcc.Count -gt 0)
-                {
-                    $recipients += $mailbcc
-                }
-                WriteLog "      Report send to $($recipients -join ", ")"
+                # Just ReportsViaEmail is specified. Sending Full Report
+                Write-Log "      Just Email is specified. Sending full report."
+                $params.Body = $Reports[0]
             }
-            WriteLog "    Completed sending report via e-mail."
+
+            if ($mailcc.Count -gt 0)
+            {
+                $params.Add("CC", $mailcc)
+            }
+
+            if ($mailbcc.Count -gt 0)
+            {
+                $params.Add("BCC", $mailbcc)
+            }
+            Send-MailMessage @params -BodyAsHtml -ErrorAction Stop
+
+            $recipients = $mailto
+            if ($mailcc.Count -gt 0)
+            {
+                $recipients += $mailcc
+            }
+
+            if ($mailbcc.Count -gt 0)
+            {
+                $recipients += $mailbcc
+            }
+            Write-Log "      Report send to $($recipients -join ", ")"
+            Write-Log "    Completed sending report via e-mail."
         }
         catch
         {
-            WriteLog "[ERROR] Error while sending report e-mail: $($_.Exception.Message)"
+            Write-Log "[ERROR] Error while sending report e-mail: $($_.Exception.Message)"
         }
     }
     else
     {
-        WriteLog "    Sending report via e-mail not required"
+        Write-Log "    Sending report via e-mail not required"
     }
 
     if ($reportsToDisk -eq $true)
     {
-        WriteLog "    Storing report to disk"
+        Write-Log "    Storing report to disk"
         if (Test-Path -Path $reportfile)
         {
-            WriteLog "      Report file already exists. Removing"
+            Write-Log "      Report file already exists. Removing"
             Remove-Item -Path $reportfile
         }
 
-        Add-Content -Path $reportfile -Value $report
-        WriteLog "      Report stored to $reportfile"
-        WriteLog "    Completed storing report to disk"
+        Add-Content -Path $reportfile -Value $Reports[0]
+        Write-Log "      Report stored to $reportfile"
+        Write-Log "    Completed storing report to disk"
     }
     else
     {
-        WriteLog "    Storing report to disk not required"
+        Write-Log "    Storing report to disk not required"
     }
 
-    WriteLog "  Completed processing report"
+    Write-Log "  Completed processing report"
 }
-
 
 # -------------------- START SCRIPT --------------------
 
@@ -857,12 +927,12 @@ if (-not(Test-Path -Path $logpath))
 
 $logfile = Join-Path -Path $logpath -ChildPath "$($appConfig.AppSettings.Logging.LogPrefix)-$date.log"
 
-WriteLog "****************************************************"
-WriteLog "Starting periodic checks"
-WriteLog "Start time: $start"
-WriteLog "****************************************************"
+Write-Log "****************************************************"
+Write-Log "Starting periodic checks"
+Write-Log "Start time: $start"
+Write-Log "****************************************************"
 
-WriteLog "Starting script preparations"
+Write-Log "Starting script preparations"
 
 
 # Initialize script variables
@@ -909,7 +979,7 @@ if ($reportsToDisk -eq $true)
         }
         catch
         {
-            WriteLog "**** [ERROR]: Error occurred during creating reports folder ($reportsFolder). Error message: $($_.Exception.Message)"
+            Write-Log "**** [ERROR]: Error occurred during creating reports folder ($reportsFolder). Error message: $($_.Exception.Message)"
             exit 40
         }
     }
@@ -954,22 +1024,20 @@ if ($reportsViaEmail -eq $true)
     }
     if ($mailto.Count -eq 0)
     {
-        WriteLog "**** [ERROR]: No valid To email addresses specified!"
+        Write-Log "**** [ERROR]: No valid To email addresses specified!"
         exit 50
     }
     $mailfrom = $appConfig.AppSettings.Email.MailFrom
     $smtpserver = $appConfig.AppSettings.Email.SMTPServer
 }
 
-WriteLog "Starting checks"
+Write-Log "Starting checks"
 
 # Read required input files
 $configPath = Join-Path -Path $scriptpath -ChildPath $configName
 if (Test-Path -Path $configPath)
 {
-    $urls = ReadConfiguration (Join-Path -Path $configPath -ChildPath "urls.txt")
-    $excludedpatches = ReadConfiguration (Join-Path -Path $configPath -ChildPath "patchexclusions.txt")
-    $ServerConfig = ReadConfiguration (Join-Path -Path $configPath -ChildPath "servers.txt")
+    $ServerConfig = Read-Configuration (Join-Path -Path $configPath -ChildPath 'servers.txt')
     Test-ValidConfiguration -ServerConfig $ServerConfig
 }
 else
@@ -981,29 +1049,29 @@ else
 $checks = @()
 
 # Read the check definition files
-ReadCheckFiles
+Read-CheckFiles
 
-InitializeScriptVariable $ServerConfig
+Initialize-ScriptVariable $ServerConfig
 
-WriteLog " "
+Write-Log " "
 $runChecks = $checks
 
 if ($Full)
 {
-    WriteLog "Parameter Full specified, running all checks"
+    Write-Log "Parameter Full specified, running all checks"
 }
 else
 {
-    WriteLog "Parameter Full NOT specified, only running applicable checks"
+    Write-Log "Parameter Full NOT specified, only running applicable checks"
     # Check if weekly check and first Monday of the month
     if ($today.DayOfWeek -ne "Monday")
     {
         # Not Monday, filter Weekly checks
-        $runChecks = $runChecks | Where-Object { $_.Schedule -ne "Weekly" }
+        $runChecks = $runChecks | Where-Object -FilterScript { $_.Schedule -ne "Weekly" }
     }
     else
     {
-        WriteLog "Executing weekly checks"
+        Write-Log "Executing weekly checks"
     }
 
     if ($today.Day -gt 8 -or $today.DayOfWeek -ne "Monday")
@@ -1013,7 +1081,7 @@ else
     }
     else
     {
-        WriteLog "Executing monthly checks"
+        Write-Log "Executing monthly checks"
     }
 
     if (($today.Month % 3 -ne 1) -or $today.Day -gt 8 -or $today.DayOfWeek -ne "Monday")
@@ -1023,16 +1091,16 @@ else
     }
     else
     {
-        WriteLog "Executing quarterly checks"
+        Write-Log "Executing quarterly checks"
     }
 }
 
 $localChecks = $runChecks | Where-Object -FilterScript { $_.Type -eq "Local" }
 $remoteChecks = $runChecks | Where-Object -FilterScript { $_.Type -eq "Remote" }
 
-GenerateScripts $localChecks
+New-ScriptsCollection $localChecks
 
-FinalizeScriptVariable $ServerConfig
+Complete-ScriptVariable $ServerConfig
 
 if (-not ([String]::IsNullOrWhiteSpace($appConfig.AppSettings.Credentials.Password)))
 {
@@ -1042,25 +1110,24 @@ if (-not ([String]::IsNullOrWhiteSpace($appConfig.AppSettings.Credentials.Passwo
 }
 else
 {
-    WriteLog "**** [ERROR]: Error reading password from config file: No password specified! Please make sure a password is configured."
+    Write-Log "**** [ERROR]: Error reading password from config file: No password specified! Please make sure a password is configured."
     exit 60
 }
 
-RunScripts $cred
+Invoke-ScriptsCollection -Credential $cred
 
-RunRemoteChecks $remoteChecks
+Invoke-RemoteChecks -RemoteChecks $remoteChecks
 
-$report = ""
-AnalyzeResults $runChecks
+$reports = Test-ResultsReport -RunChecks $runChecks
 
-ProcessReport $report
+Start-ReportCreation -Reports $reports
 
-WriteLog "Completed periodic checks"
+Write-Log "Completed periodic checks"
 
 $end = Get-Date
 $diff = $end - $start
-WriteLog "****************************************************"
-WriteLog "End time: $end"
-WriteLog "Duration: $([System.Math]::Round($diff.TotalSeconds)) seconds"
-WriteLog "****************************************************"
-WriteLog " "
+Write-Log "****************************************************"
+Write-Log "End time: $end"
+Write-Log "Duration: $([System.Math]::Round($diff.TotalSeconds)) seconds"
+Write-Log "****************************************************"
+Write-Log " "

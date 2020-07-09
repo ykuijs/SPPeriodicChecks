@@ -10,43 +10,43 @@ $script:checks += $item
 
 function script:Check11_ContentDBStatus()
 {
-    $sb = [Scriptblock]::Create( {
-            WriteLog "Starting Check 11: Content Database Status check"
-            $results.Check11 = ""
+    $sb = {
+        Write-Log "Starting Check 11: Content Database Status check"
+        $results.Check11 = ""
 
-            $errorCount = 0
-            $errorDB = ""
+        $errorCount = 0
+        $errorDB = ""
 
-            foreach ($webapp in Get-SPWebApplication)
+        foreach ($webapp in Get-SPWebApplication)
+        {
+            foreach ($contentDB in $webapp.ContentDatabases)
             {
-                foreach ($contentDB in $webapp.ContentDatabases)
+                if ($contentDB.Status -ne "Online")
                 {
-                    if ($contentDB.Status -ne "Online")
+                    $errorCount++
+                    if ($errorDB -ne "")
                     {
-                        $errorCount++
-                        if ($errorDB -ne "")
-                        {
-                            $errorDB += ", "
-                        }
-                        $errorDB += $contentDB.Name
+                        $errorDB += ", "
                     }
+                    $errorDB += $contentDB.Name
                 }
             }
+        }
 
-            if ($errorCount -gt 0)
-            {
-                WriteLog "  Check Failed"
-                $results.Check11 = $results.Check11 + "Database Status Check: $errorCount database(s) failed`r`n"
-                $results.Check11 = $results.Check11 + "`tDatabases: $errorDB`r`n"
-            }
-            else
-            {
-                WriteLog "  Check Passed"
-                $results.Check11 = $results.Check11 + "Database Status Check: Passed`r`n"
-            }
+        if ($errorCount -gt 0)
+        {
+            Write-Log "  Check Failed"
+            $results.Check11 = $results.Check11 + "Database Status Check: $errorCount database(s) failed`r`n"
+            $results.Check11 = $results.Check11 + "`tDatabases: $errorDB`r`n"
+        }
+        else
+        {
+            Write-Log "  Check Passed"
+            $results.Check11 = $results.Check11 + "Database Status Check: Passed`r`n"
+        }
 
-            WriteLog "Completed Check 11: Content Database Status check"
-        })
+        Write-Log "Completed Check 11: Content Database Status check"
+    }
 
     return $sb.ToString()
 }

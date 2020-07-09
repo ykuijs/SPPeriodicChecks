@@ -10,91 +10,91 @@ $script:checks += $item
 
 function script:CheckM4_SSLCheck()
 {
-    $sb = [Scriptblock]::Create( {
-            WriteLog "Starting Check M4: SSL check"
-            $results.CheckM4 = ""
+    $sb = {
+        Write-Log "Starting Check M4: SSL check"
+        $results.CheckM4 = ""
 
-            $expiryperiod = 90
+        $expiryperiod = 90
 
-            $errorCount = 0
-            $errorCertificates = ""
+        $errorCount = 0
+        $errorCertificates = ""
 
-            $certs = Get-ChildItem -Path Cert:\LocalMachine\My -Recurse
-            foreach ($cert in $certs)
+        $certs = Get-ChildItem -Path Cert:\LocalMachine\My -Recurse
+        foreach ($cert in $certs)
+        {
+            if ($cert.NotAfter -lt (Get-Date).AddDays($expiryperiod))
             {
-                if ($cert.NotAfter -lt (Get-Date).AddDays($expiryperiod))
+                $name = $cert.Subject.Replace("CN=", "")
+                if ($cert.NotAfter -lt (Get-Date))
                 {
-                    $name = $cert.Subject.Replace("CN=", "")
-                    if ($cert.NotAfter -lt (Get-Date))
+                    $expiry = "Certificate has expired."
+                }
+                else
+                {
+                    $expiry = $cert.NotAfter.ToString()
+                }
+                $errorCertificates += "`tWindows - $($name): $expiry`r`n"
+                $errorCount++
+            }
+        }
+
+        if (Get-PSSnapin Microsoft.SharePoint.Powershell -EA 0)
+        {
+            $SPcerts = Get-SPTrustedRootAuthority
+            foreach ($cert in $SPcerts)
+            {
+                if ($cert.Certificate.NotAfter -lt (Get-Date).AddDays($expiryperiod))
+                {
+                    $name = $cert.Certificate.Subject.Replace("CN=", "")
+                    if ($cert.Certificate.NotAfter -lt (Get-Date))
                     {
                         $expiry = "Certificate has expired."
                     }
                     else
                     {
-                        $expiry = $cert.NotAfter.ToString()
+                        $expiry = $cert.Certificate.NotAfter.ToString()
                     }
-                    $errorCertificates += "`tWindows - $($name): $expiry`r`n"
+                    $errorCertificates += "`tSharePoint - $($name): $expiry`r`n"
                     $errorCount++
                 }
             }
+        }
 
-            if (Get-PSSnapin Microsoft.SharePoint.Powershell -EA 0)
+        if (Get-PSSnapin Microsoft.SharePoint.Powershell -EA 0)
+        {
+            $SPTIcerts = Get-SPTrustedIdentityTokenIssuer
+            foreach ($cert in $SPTIcerts)
             {
-                $SPcerts = Get-SPTrustedRootAuthority
-                foreach ($cert in $SPcerts)
+                if ($cert.SigningCertificate.NotAfter -lt (Get-Date).AddDays($expiryperiod))
                 {
-                    if ($cert.Certificate.NotAfter -lt (Get-Date).AddDays($expiryperiod))
+                    $name = $cert.Name
+                    if ($cert.SigningCertificate.NotAfter -lt (Get-Date))
                     {
-                        $name = $cert.Certificate.Subject.Replace("CN=", "")
-                        if ($cert.Certificate.NotAfter -lt (Get-Date))
-                        {
-                            $expiry = "Certificate has expired."
-                        }
-                        else
-                        {
-                            $expiry = $cert.Certificate.NotAfter.ToString()
-                        }
-                        $errorCertificates += "`tSharePoint - $($name): $expiry`r`n"
-                        $errorCount++
+                        $expiry = "Certificate has expired."
                     }
+                    else
+                    {
+                        $expiry = $cert.SigningCertificate.NotAfter.ToString()
+                    }
+                    $errorCertificates += "`tSP Token Issuer - $($name): $expiry`r`n"
+                    $errorCount++
                 }
             }
+        }
 
-            if (Get-PSSnapin Microsoft.SharePoint.Powershell -EA 0)
-            {
-                $SPTIcerts = Get-SPTrustedIdentityTokenIssuer
-                foreach ($cert in $SPTIcerts)
-                {
-                    if ($cert.SigningCertificate.NotAfter -lt (Get-Date).AddDays($expiryperiod))
-                    {
-                        $name = $cert.Name
-                        if ($cert.SigningCertificate.NotAfter -lt (Get-Date))
-                        {
-                            $expiry = "Certificate has expired."
-                        }
-                        else
-                        {
-                            $expiry = $cert.SigningCertificate.NotAfter.ToString()
-                        }
-                        $errorCertificates += "`tSP Token Issuer - $($name): $expiry`r`n"
-                        $errorCount++
-                    }
-                }
-            }
-
-            if ($errorCertificates -ne "")
-            {
-                WriteLog "  Check Failed"
-                $results.CheckM4 = $results.CheckM4 + "SSL Check: Failed`r`n"
-                $results.CheckM4 = $results.CheckM4 + $errorCertificates
-            }
-            else
-            {
-                WriteLog "  Check Passed"
-                $results.CheckM4 = $results.CheckM4 + "SSL Check: Passed`r`n"
-            }
-            WriteLog "Completed Check M4: SSL check"
-        })
+        if ($errorCertificates -ne "")
+        {
+            Write-Log "  Check Failed"
+            $results.CheckM4 = $results.CheckM4 + "SSL Check: Failed`r`n"
+            $results.CheckM4 = $results.CheckM4 + $errorCertificates
+        }
+        else
+        {
+            Write-Log "  Check Passed"
+            $results.CheckM4 = $results.CheckM4 + "SSL Check: Passed`r`n"
+        }
+        Write-Log "Completed Check M4: SSL check"
+    }
 
     return $sb.ToString()
 }

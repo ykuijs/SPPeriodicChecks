@@ -10,29 +10,29 @@ $script:checks += $item
 
 function script:CheckW1_PermissionsCheck()
 {
-    $sb = [Scriptblock]::Create( {
-            WriteLog "Starting Check W1: Permissions check"
-            $results.CheckW1 = ""
+    $sb = {
+        Write-Log "Starting Check W1: Permissions check"
+        $results.CheckW1 = ""
 
-            $errorCount = 0
-            #$erroredComponents = ""
+        $errorCount = 0
+        #$erroredComponents = ""
 
-            #$errorCount++
-            #$erroredComponents += $component.Name
+        #$errorCount++
+        #$erroredComponents += $component.Name
 
-            if ($errorCount -gt 0)
-            {
-                WriteLog "  Check Failed"
-                $results.CheckW1 = $results.CheckW1 + "Permissions Check: Failed`r`n"
-                $results.CheckW1 = $results.CheckW1 + "`t$errorCount components failed`r`n"
-            }
-            else
-            {
-                WriteLog "  Check Passed"
-                $results.CheckW1 = $results.CheckW1 + "Permissions Check: Passed`r`n"
-            }
-            WriteLog "Completed Check W1: Permissions check"
-        })
+        if ($errorCount -gt 0)
+        {
+            Write-Log "  Check Failed"
+            $results.CheckW1 = $results.CheckW1 + "Permissions Check: Failed`r`n"
+            $results.CheckW1 = $results.CheckW1 + "`t$errorCount components failed`r`n"
+        }
+        else
+        {
+            Write-Log "  Check Passed"
+            $results.CheckW1 = $results.CheckW1 + "Permissions Check: Passed`r`n"
+        }
+        Write-Log "Completed Check W1: Permissions check"
+    }
 
     return $sb.ToString()
 }
