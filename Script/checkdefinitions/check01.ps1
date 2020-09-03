@@ -12,6 +12,55 @@ function script:Check1_QuickEnvCheck()
 {
     Write-Log "    Starting Check 1: Quick Environment check"
 
+    function Get-WebPage
+    {
+        param
+        (
+            [System.String]
+            $Url
+        )
+
+        try
+        {
+            $request = [System.Net.WebRequest]::Create($url)
+            $request.Credentials = $credential
+            $request.UserAgent = "Mozilla/5.0 (compatible; MSIE 11.0; Windows NT; Windows NT 6.1; en-US"
+            $request.Headers.Add("X-FORMS_BASED_AUTH_ACCEPTED", "f")
+            $request.Method = "GET"
+            $request.Accept = "text/html, application/xhtml+xml, */*"
+
+            $response = $request.GetResponse()
+            $stream = New-Object System.IO.StreamReader($response.GetResponseStream())
+            $null = $stream.ReadToEnd()
+            return $response
+        }
+        catch [System.Net.WebException]
+        {
+            if ($_.Exception.Message -like "The remote name could not be resolved*")
+            {
+                # Host name cannot be resolved
+                return $_.Exception.Message
+            }
+            elseif ($request.RequestUri.AbsoluteUri -eq $request.Address.AbsoluteUri)
+            {
+                # Incorrect credentials specified
+                return $_.Exception.Message
+            }
+            else
+            {
+                # Redirect to specific page
+                return $request.Address
+            }
+        }
+        finally
+        {
+            if ($null -ne $stream)
+            {
+                $stream.Dispose()
+            }
+        }
+    }
+
     $urls = Read-Configuration (Join-Path -Path $configPath -ChildPath 'urls.txt')
 
     if ($null -eq $results.Remote)
@@ -28,54 +77,56 @@ function script:Check1_QuickEnvCheck()
     foreach ($url in $urls)
     {
         Write-Log "      Processing url `"$($url.URL)`""
-        try
+        #Actually making the request using the credentials and other properties
+        $result = Get-WebPage -Url $url.URL
+
+        if ($result -is [System.Net.HttpWebResponse])
         {
-            #Actually making the request using the credentials and other properties
-            $request = [System.Net.WebRequest]::Create($url.URL)
-            $request.Credentials = $credential
-            $request.UserAgent = "Mozilla/5.0 (compatible; MSIE 11.0; Windows NT; Windows NT 6.1; en-US"
-            $request.Headers.Add("X-FORMS_BASED_AUTH_ACCEPTED", "f")
-            $request.Method = "GET"
-            $request.Accept = "text/html, application/xhtml+xml, */*"
-
-            $response = $request.GetResponse()
-            $stream = New-Object System.IO.StreamReader($response.GetResponseStream())
-            $null = $stream.ReadToEnd()
-
-            if ($response.Headers -contains "SharePointError")
+            if ($result.Headers -contains "SharePointError")
             {
                 #SharePointError header found, check NOT OK
                 $errorURL += "$($url.URL) (Errorpage was returned)"
                 $errorCount++
             }
         }
-        catch
+        elseif ($result -is [System.Uri])
+        {
+            Write-Log "        Checking redirected URL `"$($result.AbsoluteUri)`""
+            $result = Get-WebPage -Url $result.AbsoluteUri
+
+            if ($result -is [System.Net.HttpWebResponse])
+            {
+                if ($result.Headers -contains "SharePointError")
+                {
+                    #SharePointError header found, check NOT OK
+                    $errorURL += "$($url.URL) (Errorpage was returned)"
+                    $errorCount++
+                }
+            }
+            else
+            {
+                #Error occurred during retrieving URL, check NOT OK
+                $errorURL += "$($url.URL) (HTTP Error: $($result.StatusCode))`r`n"
+                $errorCount++
+            }
+        }
+        else
         {
             #Error occurred during retrieving URL, check NOT OK
-            $errorURL += "$($url.URL) (HTTP Error: $($response.StatusCode))`r`n"
+            $errorURL += "$($url.URL) (Error: $($result))`r`n"
             $errorCount++
-        }
-        finally
-        {
-            if ($null -ne $stream)
-            {
-                $stream.Dispose()
-            }
-
-            if ($null -ne $response)
-            {
-                $response.Dispose()
-            }
         }
     }
 
     if ($errorCount -gt 0)
     {
+        Write-Log "      Check Failed"
         $results.Remote.Check1 = $results.Remote.Check1 + "URL Check: $errorCount url(s) failed`r`n"
         $results.Remote.Check1 = $results.Remote.Check1 + "`t$errorURL"
     }
     else
     {
+        Write-Log "      Check Passed"
         $results.Remote.Check1 = $results.Remote.Check1 + "URL Check: Passed`r`n"
     }
     Write-Log "    Completed Check 1: Quick Environment check"

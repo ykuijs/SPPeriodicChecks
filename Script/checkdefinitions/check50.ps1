@@ -14,13 +14,13 @@ function script:Check50_LunPathCheck()
         Write-Log "Starting Check 50: LUN Path check"
         $results.Check50 = ""
 
-        $numberOfPathsRequired = 4
+        [int]$numberOfPathsRequired = <REPLACE_MIN_LUNPATHS>
 
         $errorLUNs = ""
 
         try
         {
-            $luns = Get-WMIObject -Class HPDSM_PERFINFO -Namespace "root\WMI" -ErrorAction Stop
+            $luns = Get-WMIObject -Class REPLACE_WMI_CLASS -Namespace "root\WMI" -ErrorAction Stop
 
             foreach ($lun in $luns)
             {
@@ -45,11 +45,22 @@ function script:Check50_LunPathCheck()
         catch
         {
             Write-Log "  Check Failed"
-            $results.Check50 = $results.Check50 + "LUN Path Check: Failed. Cannot find WMI Class HPDSM_PERFINFO. `r`n"
+            $results.Check50 = $results.Check50 + "LUN Path Check: Failed. Cannot find WMI Class REPLACE_WMI_CLASS. `r`n"
         }
 
         Write-Log "Completed Check 50: LUN Path check"
     }
+
+    $checkConfig = $appConfig.AppSettings.Checks.Check | Where-Object -FilterScript { $_.Id -eq 50 }
+
+    if ($null -eq $checkConfig)
+    {
+        Write-Log "  [ERROR] Cannot find settings for Check 31 in Config.xml."
+        exit 90
+    }
+
+    $sb = $sb -replace "REPLACE_WMI_CLASS", $checkConfig.WMIClass
+    $sb = $sb -replace "<REPLACE_MIN_LUNPATHS>", $checkConfig.MinLUNPaths
 
     return $sb.ToString()
 }

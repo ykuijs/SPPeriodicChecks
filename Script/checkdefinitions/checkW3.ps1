@@ -21,12 +21,12 @@ function script:CheckW3_BaselineComplianceCheck()
         {
             try
             {
-                $results = Test-DscConfiguration -Detailed -ErrorAction Stop
+                $result = Test-DscConfiguration -Detailed -ErrorAction Stop
 
-                if ($results.InDesiredState -eq $false)
+                if ($result.InDesiredState -eq $false)
                 {
-                    $errorCount = $results.ResourcesNotInDesiredState.Count
-                    $erroredResources = $results.ResourcesNotInDesiredState.ResourceId -join ", "
+                    $errorCount = $result.ResourcesNotInDesiredState.Count
+                    $erroredResources = $result.ResourcesNotInDesiredState.ResourceId -join ", "
                 }
             }
             catch
@@ -44,13 +44,13 @@ function script:CheckW3_BaselineComplianceCheck()
             else
             {
                 Write-Log '  Check Passed'
-                $results.CheckW3 = $results.CheckW3 + 'Baseline Compliancy Check: Passed`r`n'
+                $results.CheckW3 = $results.CheckW3 + "Baseline Compliancy Check: Passed`r`n"
             }
         }
         else
         {
-            Write-Log   Check Skipped (DSC not used)
-            $results.CheckW3 = $results.CheckW3 + 'Baseline Compliancy Check: Skipped (DSC not used)`r`n'
+            Write-Log '  Check Skipped (DSC not used)'
+            $results.CheckW3 = $results.CheckW3 + "Baseline Compliancy Check: Skipped (DSC not used)`r`n"
         }
 
         Write-Log 'Completed Check W3: Baseline Compliance check'

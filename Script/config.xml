@@ -15,6 +15,7 @@
         <MailTo>sharepoint@beheer.nl</MailTo>
         <MailCC></MailCC>
         <MailBCC></MailBCC>
+        <SubjectSuffix></SubjectSuffix>
     </Email>
     <Reporting>
         <ReportsToDisk>false</ReportsToDisk>
@@ -29,4 +30,14 @@
         <LogFolder>Logs</LogFolder>
         <RemoteLogFolder>C:\Logs</RemoteLogFolder>
     </Logging>
+    <Checks>
+        <Check Id='31'>
+            <Path>C:\Windows\Monitoring</Path>
+            <Filename>servicesconfig.txt</Filename>
+        </Check>
+        <Check Id='50'>
+            <WMIClass>HPDSM_PERFINFO</WMIClass>
+            <MinLUNPaths>4</MinLUNPaths>
+        </Check>
+    </Checks>
 </AppSettings>

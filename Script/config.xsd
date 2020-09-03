@@ -3,56 +3,80 @@
   <xs:element name="AppSettings">
     <xs:complexType>
       <xs:sequence>
-        <xs:element name="General" minOccurs="1" maxOccurs="1">
+        <xs:element name="General">
           <xs:complexType>
             <xs:sequence>
-              <xs:element type="xs:boolean" name="Debug" minOccurs="1" />
-              <xs:element type="xs:unsignedInt" name="RemoteTimeOut" minOccurs="1" />
+              <xs:element type="xs:boolean" name="Debug"/>
+              <xs:element type="xs:unsignedInt" name="RemoteTimeOut"/>
             </xs:sequence>
           </xs:complexType>
         </xs:element>
-        <xs:element name="Credentials" minOccurs="1">
+        <xs:element name="Credentials">
           <xs:complexType>
             <xs:sequence>
-              <xs:element type="xs:string" name="UserName" minOccurs="1" />
-              <xs:element type="xs:string" name="Password" minOccurs="1" />
+              <xs:element type="xs:string" name="UserName"/>
+              <xs:element type="xs:string" name="Password"/>
             </xs:sequence>
           </xs:complexType>
         </xs:element>
-        <xs:element name="Email" minOccurs="1">
+        <xs:element name="Email">
           <xs:complexType>
             <xs:sequence>
-              <xs:element type="xs:boolean" name="SendReportsViaEmail" minOccurs="1" />
-              <xs:element type="xs:string" name="SMTPServer" minOccurs="1" />
-              <xs:element type="xs:string" name="MailFrom" minOccurs="1" />
-              <xs:element type="xs:string" name="MailTo" minOccurs="1" />
-              <xs:element type="xs:string" name="MailCC" minOccurs="1" />
-              <xs:element type="xs:string" name="MailBCC" minOccurs="1" />
+              <xs:element type="xs:boolean" name="SendReportsViaEmail"/>
+              <xs:element type="xs:string" name="SMTPServer"/>
+              <xs:element type="xs:string" name="MailFrom"/>
+              <xs:element type="xs:string" name="MailTo"/>
+              <xs:element type="xs:string" name="MailCC"/>
+              <xs:element type="xs:string" name="MailBCC"/>
+              <xs:element type="xs:string" name="SubjectSuffix"/>
             </xs:sequence>
           </xs:complexType>
         </xs:element>
-        <xs:element name="Reporting" minOccurs="1">
+        <xs:element name="Reporting">
           <xs:complexType>
             <xs:sequence>
-              <xs:element type="xs:boolean" name="ReportsToDisk" minOccurs="1" />
-              <xs:element type="xs:string" name="ReportsFolder" minOccurs="1" />
+              <xs:element type="xs:boolean" name="ReportsToDisk"/>
+              <xs:element type="xs:string" name="ReportsFolder"/>
             </xs:sequence>
           </xs:complexType>
         </xs:element>
-        <xs:element name="PatchScan" minOccurs="1">
+        <xs:element name="PatchScan">
           <xs:complexType>
             <xs:sequence>
-              <xs:element type="xs:string" name="WSUSCabPath" minOccurs="1" />
-              <xs:element type="xs:boolean" name="DownloadWSUSFile" minOccurs="1" />
+              <xs:element type="xs:string" name="WSUSCabPath"/>
+              <xs:element type="xs:boolean" name="DownloadWSUSFile"/>
             </xs:sequence>
           </xs:complexType>
         </xs:element>
-        <xs:element name="Logging" minOccurs="1">
+        <xs:element name="Logging">
           <xs:complexType>
             <xs:sequence>
-              <xs:element type="xs:string" name="LogPrefix" minOccurs="1" />
-              <xs:element type="xs:string" name="LogFolder" minOccurs="1" />
-              <xs:element type="xs:string" name="RemoteLogFolder" minOccurs="1" />
+              <xs:element type="xs:string" name="LogPrefix"/>
+              <xs:element type="xs:string" name="LogFolder"/>
+              <xs:element type="xs:string" name="RemoteLogFolder"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Checks">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Check" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element type="xs:string" name="Path" minOccurs="0" />
+                    <xs:element type="xs:string" name="Filename" minOccurs="0" />
+                    <xs:element type="xs:string" name="WMIClass" minOccurs="0" />
+                    <xs:element type="xs:unsignedInt" name="MinLUNPaths" minOccurs="0" />
+                  </xs:sequence>
+                  <xs:attribute name="Id" use="required">
+                    <xs:simpleType>
+                      <xs:restriction base="xs:integer">
+                        <xs:pattern value="31|50"/>
+                      </xs:restriction>
+                    </xs:simpleType>
+                  </xs:attribute>
+                </xs:complexType>
+              </xs:element>
             </xs:sequence>
           </xs:complexType>
         </xs:element>
