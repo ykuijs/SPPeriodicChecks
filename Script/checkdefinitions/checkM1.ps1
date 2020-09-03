@@ -116,10 +116,10 @@ function script:Start-ScanOnServer()
                         if ($catUpdates.Count -gt 0)
                         {
                             $catName = $category.Name
-                            $missingPatchesDetails += "`t`t$catName  : $($catUpdates.Count) ($(($catUpdates | ForEach { $_.KBArticleIDs | Select-Object -First 1 }) -join ", "))`r`n"
+                            $missingPatchesDetails += "`t`t$catName  : $($catUpdates.Count) ($(($catUpdates | ForEach-Object { $_.KBArticleIDs | Select-Object -First 1 }) -join ", "))`r`n"
 
                             $log += "`r`n          Category: $($category.Name)`r`n"
-                            $catUpdates | ForEach { $log += "          - $($_.Title)`r`n" }
+                            $catUpdates | ForEach-Object { $log += "          - $($_.Title)`r`n" }
                             $missingPatchesCount += $catUpdates.Count
                         }
                     }

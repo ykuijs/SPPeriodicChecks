@@ -9,8 +9,8 @@
     e-mail address.
     When started, the script reads its config from a few XML files and then loads all scripts from the
     checkdefinitions folder. A check can run in two modes:
-    - Local  : On the SharePoint server
-    - Remote : From the check server
+    - Local  : On the SharePoint/SQL/CAM server
+    - Remote : From the check server against the SharePoint farm
     For troubleshooting purposes, a log file is created. Both on the source server and on each checked target
     servers.
 .PARAMETER Full
@@ -23,30 +23,22 @@
 .EXAMPLE
     .\RunPeriodicChecks.ps1 -Full
     Run all of the available tests (ignore the schedule of each test)
-.REQUIRED_FILE
-    .\config.xml
-    Configuration file for the script
-.REQUIRED_FILE
-    .\checkdefinitions\*.ps1
-    Individual check files, which are used to determine which checks need to be run and how to run them
-.REQUIRED_FILE
-    .\config\servers.txt
-    Configuration file with all servers, farms and roles
-.REQUIRED_FILE
-    .\config\urls.txt
-    Configuration file with all urls which need to be checked
-.REQUIRED_FILE
-    .\config\patchexclusions.txt
-    Configuration file with all patches that have to be excluded from the Missing Patch reporting (M1)
-.REQUIRED_FILE
-    .\config\contentdbexclusions.txt
-    Configuration file with all content databases that have to be excluded from the Content
-    Database Size check (D16)
+.INPUTS
+    This script requires the following files
+    .\config.xml                     - Configuration file for the script
+    .\config.xsd                     - XML schema for the configuration file
+    .\checkdefinitions\*.ps1         - Individual check files, which are used to determine which checks need to be run and how to run them
+    .\config\contentdbexclusions.txt - Configuration file with all content databases that have to be excluded from the Content Database Size check (D16)
+    .\config\groups.txt              - Configuration file with Active Directory groups and there members to be checked (D34)
+    .\config\patchexclusions.txt     - Configuration file with all patches that have to be excluded from the Missing Patch reporting (M1)
+    .\config\servers.txt             - Configuration file with all servers, farms and roles
+    .\config\servicesexclusions.txt  - Configuration file with all services that are not monitored by the script (D31)
+    .\config\urls.txt                - Configuration file with all urls which need to be checked (D01)
 .NOTES
     File Name     : RunPeriodicChecks.ps1
     Author        : Yorick Kuijs
-    Version       : 1.0.17
-	Last Modified : 2020-07-09
+    Version       : 1.18
+	Last Modified : 2020-09-03
 .EXITCODES
     0 : No errors encountered
     10: Cannot find config.xml file
@@ -58,7 +50,6 @@
     70: Configuration folder not found
     80: Specific configuration file not found
     90: Error while parsing check definition, please check logfile
-
 .LINK
     https://github.com/ykuijs/SPPeriodicChecks
 #>
