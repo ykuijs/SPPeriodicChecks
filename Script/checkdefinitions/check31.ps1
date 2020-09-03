@@ -19,8 +19,8 @@ function script:Check31_ServicesCheck()
         $errorServices = ""
 
         $excludedServices = @("<REPLACE_EXCL_SVC>")
-        $configFolder = "c:\Windows\Monitoring"
-        $configFilename = "servicesconfig.txt"
+        $configFolder = "<REPLACE_CONFIG_PATH>"
+        $configFilename = "<REPLACE_CONFIG_FILE>"
 
         if (-not (Test-Path -Path $configFolder))
         {
@@ -79,6 +79,17 @@ function script:Check31_ServicesCheck()
     }
 
     $sb = $sbTemplate -replace "<REPLACE_EXCL_SVC>", ($excludedservices.Service -join '", "')
+
+    $checkConfig = $appConfig.AppSettings.Checks.Check | Where-Object -FilterScript { $_.Id -eq 31 }
+
+    if ($null -eq $checkConfig)
+    {
+        Write-Log "  [ERROR] Cannot find settings for Check 31 in Config.xml."
+        exit 90
+    }
+
+    $sb = $sb -replace "<REPLACE_CONFIG_PATH>", $checkConfig.Path
+    $sb = $sb -replace "<REPLACE_CONFIG_File>", $checkConfig.Filename
 
     return $sb.ToString()
 }

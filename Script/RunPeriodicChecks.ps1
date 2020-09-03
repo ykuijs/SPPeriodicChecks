@@ -57,6 +57,7 @@
     60: No password configured in config.xml file
     70: Configuration folder not found
     80: Specific configuration file not found
+    90: Error while parsing check definition, please check logfile
 
 .LINK
     https://github.com/ykuijs/SPPeriodicChecks
@@ -825,6 +826,11 @@ function Start-ReportCreation()
                 SmtpServer = $smtpserver
             }
 
+            if ($subjectsuffix -ne "")
+            {
+                $params.Subject += " ($subjectsuffix)"
+            }
+
             if ($reportsToDisk -eq $true)
             {
                 # ReportsViaEmail and ReportToDisk are specified. Sending Summary Report
@@ -983,7 +989,8 @@ if ($reportsToDisk -eq $true)
             exit 40
         }
     }
-    $reportFile = Join-Path -Path $reportsFolder -ChildPath "CheckReport_$date.htm"
+    $datetime = Get-Date -Format "yyyyMMdd_HHmmss"
+    $reportFile = Join-Path -Path $reportsFolder -ChildPath "CheckReport_$datetime.htm"
 }
 
 ## Email variables
@@ -993,7 +1000,7 @@ if ($reportsViaEmail -eq $true)
     $mailto = @()
     foreach ($emailAddress in ($appConfig.AppSettings.Email.MailTo -split ","))
     {
-        if (Confirm-EmailAddress $emailAddress)
+        if (Confirm-EmailAddress -EmailAddress $emailAddress)
         {
             $mailto += $emailAddress
         }
@@ -1004,7 +1011,7 @@ if ($reportsViaEmail -eq $true)
     {
         foreach ($emailAddress in ($appConfig.AppSettings.Email.MailCC -split ","))
         {
-            if (Confirm-EmailAddress $emailAddress)
+            if (Confirm-EmailAddress -EmailAddress $emailAddress)
             {
                 $mailcc += $emailAddress
             }
@@ -1016,7 +1023,7 @@ if ($reportsViaEmail -eq $true)
     {
         foreach ($emailAddress in ($appConfig.AppSettings.Email.MailBCC -split ","))
         {
-            if (Confirm-EmailAddress $emailAddress)
+            if (Confirm-EmailAddress -EmailAddress $emailAddress)
             {
                 $mailbcc += $emailAddress
             }
@@ -1029,6 +1036,7 @@ if ($reportsViaEmail -eq $true)
     }
     $mailfrom = $appConfig.AppSettings.Email.MailFrom
     $smtpserver = $appConfig.AppSettings.Email.SMTPServer
+    $subjectsuffix = $appConfig.AppSettings.Email.SubjectSuffix
 }
 
 Write-Log "Starting checks"
@@ -1098,9 +1106,9 @@ else
 $localChecks = $runChecks | Where-Object -FilterScript { $_.Type -eq "Local" }
 $remoteChecks = $runChecks | Where-Object -FilterScript { $_.Type -eq "Remote" }
 
-New-ScriptsCollection $localChecks
+New-ScriptsCollection -LocalChecks $localChecks
 
-Complete-ScriptVariable $ServerConfig
+Complete-ScriptVariable -Servers $ServerConfig
 
 if (-not ([String]::IsNullOrWhiteSpace($appConfig.AppSettings.Credentials.Password)))
 {

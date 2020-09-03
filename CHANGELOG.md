@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+* Added possibility to specify a suffix for the e-mail subject (updated config.xml)
+* Added possibility to configure the file path for the Services (check 31) configuration
+  file
+* Added possibility to configure the WMI class and minimum number of LUN Paths (check 50)
+* Improved URL check (check 01) to allow only the site collection URL (without aspx) and
+  fixed 401 Unauthorized errors not being properly detected
+* Updated the report file name to now include date and time, preventing new runs on the
+  same day to overwrite the reports
+* Fixed issue in check W3, where quotes were missing in a Write-Log function call
+
 ## v1.17
 
 * Added check 19: Check if content databases aren't larger than 175GB
